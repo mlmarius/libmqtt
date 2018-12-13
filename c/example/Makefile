@@ -19,7 +19,7 @@ TARGET = $(BUILD_DIR)/example
 LINUX_FLAGS = -lpthread
 
 # detect build system for native build
-HOST_SYSTEM = $(shell uname | cut -f 1 -d_)
+HOST_SYSTEM = $(shell uname -s)
 SYSTEM ?= $(HOST_SYSTEM)
 
 # linux

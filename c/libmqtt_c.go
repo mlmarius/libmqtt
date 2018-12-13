@@ -116,19 +116,31 @@ static inline void call_topic_handler
 */
 import "C"
 import (
+	"sync"
 	"unsafe"
 
 	mqtt "github.com/goiiot/libmqtt"
 )
 
 var (
-	clients = make(map[int]mqtt.Client)
+	clients = &sync.Map{}
 )
+
+func storeClient(id int, client mqtt.Client) {
+	clients.Store(id, client)
+}
+
+func getClient(id int) mqtt.Client {
+	if client, ok := clients.Load(id); ok {
+		return client.(mqtt.Client)
+	}
+	return nil
+}
 
 // Libmqtt_handle (int client, char *topic, libmqtt_topic_handler h)
 //export Libmqtt_handle
 func Libmqtt_handle(client C.int, topic *C.char, h C.libmqtt_topic_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.Handle(C.GoString(topic), wrapTopicHandler(client, h))
 	}
 }
@@ -136,7 +148,7 @@ func Libmqtt_handle(client C.int, topic *C.char, h C.libmqtt_topic_handler) {
 // Libmqtt_connect (int client)
 //export Libmqtt_connect
 func Libmqtt_connect(client C.int, h C.libmqtt_conn_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.Connect(func(server string, code byte, err error) {
 			var er *C.char
 			if err != nil {
@@ -150,7 +162,7 @@ func Libmqtt_connect(client C.int, h C.libmqtt_conn_handler) {
 // Libmqtt_subscribe (int client, char *topic, int qos)
 //export Libmqtt_subscribe
 func Libmqtt_subscribe(client C.int, topic *C.char, qos C.int) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.Subscribe(&mqtt.Topic{
 			Name: C.GoString(topic),
 			Qos:  mqtt.QosLevel(qos),
@@ -161,7 +173,7 @@ func Libmqtt_subscribe(client C.int, topic *C.char, qos C.int) {
 // Libmqtt_publish (int client, char *topic, int qos, char *payload, int payloadSize)
 //export Libmqtt_publish
 func Libmqtt_publish(client C.int, topic *C.char, qos C.int, payload *C.char, payloadSize C.int) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.Publish(&mqtt.PublishPacket{
 			TopicName: C.GoString(topic),
 			Qos:       mqtt.QosLevel(qos),
@@ -173,8 +185,7 @@ func Libmqtt_publish(client C.int, topic *C.char, qos C.int, payload *C.char, pa
 // Libmqtt_unsubscribe (int client, char *topic)
 //export Libmqtt_unsubscribe
 func Libmqtt_unsubscribe(client C.int, topic *C.char) {
-	cid := int(client)
-	if c, ok := clients[cid]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.UnSubscribe(C.GoString(topic))
 	}
 }
@@ -182,7 +193,7 @@ func Libmqtt_unsubscribe(client C.int, topic *C.char) {
 // Libmqtt_wait (int client)
 //export Libmqtt_wait
 func Libmqtt_wait(client C.int) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.Wait()
 	}
 }
@@ -190,7 +201,7 @@ func Libmqtt_wait(client C.int) {
 // Libmqtt_destroy (int client, bool force)
 //export Libmqtt_destroy
 func Libmqtt_destroy(client C.int, force bool) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.Destroy(force)
 	}
 }
@@ -198,7 +209,7 @@ func Libmqtt_destroy(client C.int, force bool) {
 // Libmqtt_set_pub_handler (int client, libmqtt_pub_handler h)
 //export Libmqtt_set_pub_handler
 func Libmqtt_set_pub_handler(client C.int, h C.libmqtt_pub_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.HandlePub(func(topic string, err error) {
 			var er *C.char
 			if err != nil {
@@ -212,7 +223,7 @@ func Libmqtt_set_pub_handler(client C.int, h C.libmqtt_pub_handler) {
 // Libmqtt_set_sub_handler (int client, libmqtt_sub_handler h)
 //export Libmqtt_set_sub_handler
 func Libmqtt_set_sub_handler(client C.int, h C.libmqtt_sub_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.HandleSub(func(topics []*mqtt.Topic, err error) {
 			for _, t := range topics {
 				var er *C.char
@@ -228,7 +239,7 @@ func Libmqtt_set_sub_handler(client C.int, h C.libmqtt_sub_handler) {
 // Libmqtt_set_unsub_handler (int client, libmqtt_unsub_handler h)
 //export Libmqtt_set_unsub_handler
 func Libmqtt_set_unsub_handler(client C.int, h C.libmqtt_unsub_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.HandleUnSub(func(topics []string, err error) {
 			for _, t := range topics {
 				var er *C.char
@@ -244,7 +255,7 @@ func Libmqtt_set_unsub_handler(client C.int, h C.libmqtt_unsub_handler) {
 // Libmqtt_set_net_handler (int client, libmqtt_net_handler h)
 //export Libmqtt_set_net_handler
 func Libmqtt_set_net_handler(client C.int, h C.libmqtt_net_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.HandleNet(func(server string, err error) {
 			if err != nil {
 				C.call_net_handler(h, client, C.CString(server), C.CString(err.Error()))
@@ -256,7 +267,7 @@ func Libmqtt_set_net_handler(client C.int, h C.libmqtt_net_handler) {
 // Libmqtt_set_persist_handler (int client, libmqtt_persist_handler h)
 //export Libmqtt_set_persist_handler
 func Libmqtt_set_persist_handler(client C.int, h C.libmqtt_persist_handler) {
-	if c, ok := clients[int(client)]; ok {
+	if c := getClient(int(client)); c != nil {
 		c.HandlePersist(func(err error) {
 			if err != nil {
 				C.call_persist_handler(h, client, C.CString(err.Error()))
@@ -268,7 +279,7 @@ func Libmqtt_set_persist_handler(client C.int, h C.libmqtt_persist_handler) {
 func wrapTopicHandler(client C.int, h C.libmqtt_topic_handler) mqtt.TopicHandler {
 	return func(topic string, qos mqtt.QosLevel, msg []byte) {
 		C.call_topic_handler(h, client, C.CString(topic), C.int(qos),
-			(*C.char)(C.CBytes(msg)), C.int(len(msg)))
+			C.CString(string(msg)), C.int(len(msg)))
 	}
 }
 

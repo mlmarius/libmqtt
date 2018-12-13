@@ -19,23 +19,18 @@ package libmqtt
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"io"
 	"io/ioutil"
 	"time"
 )
 
+var (
+	ErrNotSupportedVersion = errors.New("mqtt version not supported ")
+)
+
 // Option is client option for connection options
 type Option func(*AsyncClient) error
-
-// WithPersist defines the persist method to be used
-func WithPersist(method PersistMethod) Option {
-	return func(c *AsyncClient) error {
-		if method != nil {
-			c.persist = method
-		}
-		return nil
-	}
-}
 
 // WithCleanSession will set clean flag in connect packet
 func WithCleanSession(f bool) Option {
@@ -80,7 +75,8 @@ func WithAutoReconnect(autoReconnect bool) Option {
 // maxDelay defines the upper bound of backoff delay
 // factor is applied to the backoff after each retry.
 //
-// e.g. FirstDelay = 1s and Factor = 2, then the SecondDelay is 2s, the ThirdDelay is 4s
+// e.g. FirstDelay = 1s and Factor = 2
+// 		then the SecondDelay is 2s, the ThirdDelay is 4s
 func WithBackoffStrategy(firstDelay, maxDelay time.Duration, factor float64) Option {
 	return func(c *AsyncClient) error {
 		if firstDelay < time.Millisecond {
@@ -127,7 +123,7 @@ func WithWill(topic string, qos QosLevel, retain bool, payload []byte) Option {
 // when connecting to these servers
 func WithSecureServer(servers ...string) Option {
 	return func(c *AsyncClient) error {
-		c.options.secureServers = servers
+		c.options.secureServers = append(c.options.secureServers, servers...)
 		return nil
 	}
 }
@@ -137,7 +133,7 @@ func WithSecureServer(servers ...string) Option {
 // only TCP connection supported for now
 func WithServer(servers ...string) Option {
 	return func(c *AsyncClient) error {
-		c.options.servers = servers
+		c.options.servers = append(c.options.servers, servers...)
 		return nil
 	}
 }
@@ -226,8 +222,11 @@ func WithDialTimeout(timeout uint16) Option {
 	}
 }
 
-// WithBuf designate the channel size of send and recv
-func WithBuf(sendBuf, recvBuf int) Option {
+// WithBuf is the alias of WithBufSize
+var WithBuf = WithBufSize
+
+// WithBufSize designate the channel size of send and recv
+func WithBufSize(sendBuf, recvBuf int) Option {
 	return func(c *AsyncClient) error {
 		if sendBuf < 1 {
 			sendBuf = 1
@@ -235,18 +234,9 @@ func WithBuf(sendBuf, recvBuf int) Option {
 		if recvBuf < 1 {
 			recvBuf = 1
 		}
+
 		c.options.sendChanSize = sendBuf
 		c.options.recvChanSize = recvBuf
-		return nil
-	}
-}
-
-// WithRouter set the router for topic dispatch
-func WithRouter(r TopicRouter) Option {
-	return func(c *AsyncClient) error {
-		if r != nil {
-			c.router = r
-		}
 		return nil
 	}
 }
@@ -262,8 +252,33 @@ func WithLog(l LogLevel) Option {
 // WithVersion defines the mqtt protocol ProtoVersion in use
 func WithVersion(version ProtoVersion, compromise bool) Option {
 	return func(c *AsyncClient) error {
-		c.options.protoVersion = version
-		c.options.protoCompromise = compromise
+		switch version {
+		case V311, V5:
+			c.options.protoVersion = version
+			c.options.protoCompromise = compromise
+			return nil
+		}
+
+		return ErrNotSupportedVersion
+	}
+}
+
+// WithRouter set the router for topic dispatch
+func WithRouter(r TopicRouter) Option {
+	return func(c *AsyncClient) error {
+		if r != nil {
+			c.router = r
+		}
+		return nil
+	}
+}
+
+// WithPersist defines the persist method to be used
+func WithPersist(method PersistMethod) Option {
+	return func(c *AsyncClient) error {
+		if method != nil {
+			c.persist = method
+		}
 		return nil
 	}
 }

@@ -26,7 +26,7 @@ typedef int bool;
 #define false 0
 
 // example log level for libmqtt log
-#define LOG_LEVEL           libmqtt_log_silent
+#define LOG_LEVEL           libmqtt_log_verbose
 
 // example server address
 #define SERVER              "localhost:8883"
