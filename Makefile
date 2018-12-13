@@ -12,61 +12,61 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: test lib client clean fuzz-test
+.PHONY: test lib client clean fuzz_test
 
 TEST_FLAGS=-v -count=1 -race -mod=vendor -pkgdir=vendor -coverprofile=coverage.txt -covermode=atomic
 
-test-reconnect:
+test_reconnect:
 	go test ${TEST_FLAGS} -tags offline -run=TestClient_Reconnect
 
 test:
 	go test ${TEST_FLAGS} -run=.
 
-test-auth:
+test_auth:
 	go test ${TEST_FLAGS} -run=TestAuth
 
-test-conn:
+test_conn:
 	go test ${TEST_FLAGS} -run=TestConn
 	go test ${TEST_FLAGS} -run=TestDisConn
 
-test-ping:
+test_ping:
 	go test ${TEST_FLAGS} -run=TestPing
 
-test-pub:
+test_pub:
 	go test ${TEST_FLAGS} -run=TestPub
 
-test-sub:
+test_sub:
 	go test ${TEST_FLAGS} -run=TestSub
 	go test ${TEST_FLAGS} -run=TestUnSub
 
-.PHONY: all-lib c-lib java-lib py-lib \
-		clean-c-lib clean-java-lib clean-py-lib
+.PHONY: all_lib c_lib java_lib py_lib \
+		clean_c_lib clean_java_lib clean_py_lib
 
-all-lib: c-lib java-lib
+all_lib: c_lib java_lib
 
-clean-all-lib: clean-c-lib clean-java-lib
+clean_all_lib: clean_c_lib clean_java_lib
 
-c-lib:
+c_lib:
 	$(MAKE) -C c lib
 
-clean-c-lib:
+clean_c_lib:
 	$(MAKE) -C c clean
 
-java-lib:
+java_lib:
 	$(MAKE) -C java build
 
-clean-java-lib:
+clean_java_lib:
 	$(MAKE) -C java clean
 
 client:
 	$(MAKE) -C cmd build
 
-clean: clean-all-lib fuzz-clean
+clean: clean_all_lib fuzz_clean
 	rm -rf coverage.txt
 
-fuzz-test:
+fuzz_test:
 	go-fuzz-build github.com/goiiot/libmqtt
 	go-fuzz -bin=./libmqtt-fuzz.zip -workdir=fuzz-test
 
-fuzz-clean:
+fuzz_clean:
 	rm -rf fuzz-test libmqtt-fuzz.zip

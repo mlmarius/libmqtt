@@ -18,8 +18,52 @@ package libmqtt
 
 import (
 	"bytes"
+	"math"
 	"testing"
 )
+
+func TestIdGenerator_next(t *testing.T) {
+	gen := newIDGenerator()
+	pkt := &PublishPacket{}
+
+	for i := uint32(1); i < math.MaxUint16+100; i++ {
+		id := gen.next(pkt)
+
+		if i <= math.MaxUint16 {
+			if id == 0 {
+				t.Errorf("generated id shouldn't be 0: %d", id)
+			}
+			if i != uint32(id) {
+				t.Errorf("generated id not match: target = %d, generated = %d", i, id)
+			}
+
+			if _, ok := gen.getExtra(id); !ok {
+				t.Errorf("extra info not stored")
+			}
+		}
+
+		if i > math.MaxUint16 {
+			if id != 0 {
+				t.Errorf("generated id should be 0: %d", id)
+			}
+
+			if _, ok := gen.getExtra(id); ok {
+				t.Errorf("extra info stored")
+			}
+		}
+	}
+}
+
+func BenchmarkIdGenerator_next(b *testing.B) {
+	gen := newIDGenerator()
+	pkt := &PublishPacket{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		id := gen.next(pkt)
+		gen.free(id)
+	}
+}
 
 func TestBoolToByte(t *testing.T) {
 	if boolToByte(false) != 0x00 {

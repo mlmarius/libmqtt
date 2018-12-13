@@ -50,8 +50,8 @@ func NewClient(options ...Option) (Client, error) {
 		return nil, errors.New("no server provided, won't work ")
 	}
 
-	c.sendC = make(chan Packet, c.options.sendChanSize)
-	c.recvC = make(chan *PublishPacket, c.options.recvChanSize)
+	c.sendCh = make(chan Packet, c.options.sendChanSize)
+	c.recvCh = make(chan *PublishPacket, c.options.recvChanSize)
 
 	return c, nil
 }
@@ -59,9 +59,9 @@ func NewClient(options ...Option) (Client, error) {
 // AsyncClient mqtt client implementation
 type AsyncClient struct {
 	options *clientOptions      // client connection options
-	msgC    chan *message       // error channel
-	sendC   chan Packet         // Pub channel for sending publish packet to server
-	recvC   chan *PublishPacket // recv channel for server pub receiving
+	msgCh   chan *message       // error channel
+	sendCh  chan Packet         // pub channel for sending publish packet to server
+	recvCh  chan *PublishPacket // recv channel for server pub receiving
 	idGen   *idGenerator        // Packet id generator
 	router  TopicRouter         // Topic router
 	persist PersistMethod       // Persist method
@@ -96,7 +96,7 @@ func defaultClient() *AsyncClient {
 			protoCompromise:  false,
 			defaultTlsConfig: &tls.Config{},
 		},
-		msgC:    make(chan *message),
+		msgCh:   make(chan *message, 10),
 		ctx:     ctx,
 		exit:    cancel,
 		router:  NewTextRouter(),
@@ -112,11 +112,6 @@ func (c *AsyncClient) Handle(topic string, h TopicHandler) {
 		c.log.d("HDL registered topic handler, topic =", topic)
 		c.router.Handle(topic, h)
 	}
-}
-
-// ConnectAndWait connect to servers and wait for results
-func (c *AsyncClient) ConnectAndWait(h ConnHandler) {
-	// c.log.d("CLI connect to server, handle =", h)
 }
 
 // Connect to all designated server
@@ -158,11 +153,11 @@ func (c *AsyncClient) Publish(msg ...*PublishPacket) {
 			if p.PacketID == 0 {
 				p.PacketID = c.idGen.next(p)
 				if err := c.persist.Store(sendKey(p.PacketID), p); err != nil {
-					notifyPersistMsg(c.msgC, err)
+					notifyPersistMsg(c.msgCh, err)
 				}
 			}
 		}
-		c.sendC <- p
+		c.sendCh <- p
 	}
 }
 
@@ -177,7 +172,7 @@ func (c *AsyncClient) Subscribe(topics ...*Topic) {
 	s := &SubscribePacket{Topics: topics}
 	s.PacketID = c.idGen.next(s)
 
-	c.sendC <- s
+	c.sendCh <- s
 }
 
 // UnSubscribe topic(s)
@@ -191,7 +186,7 @@ func (c *AsyncClient) UnSubscribe(topics ...string) {
 	u := &UnSubPacket{TopicNames: topics}
 	u.PacketID = c.idGen.next(u)
 
-	c.sendC <- u
+	c.sendCh <- u
 }
 
 // Wait will wait for all connection to exit
@@ -211,7 +206,7 @@ func (c *AsyncClient) Destroy(force bool) {
 	if force {
 		c.exit()
 	} else {
-		c.sendC <- &DisConnPacket{}
+		c.sendCh <- &DisConnPacket{}
 	}
 }
 
@@ -227,9 +222,9 @@ func (c *AsyncClient) HandleSub(h SubHandler) {
 	c.subHandler = h
 }
 
-// HandleUnSub register handler for unsubscription error
+// HandleUnSub register handler for unsubscribe error
 func (c *AsyncClient) HandleUnSub(h UnSubHandler) {
-	c.log.d("CLI registered unsub handler")
+	c.log.d("CLI registered unsubscribe handler")
 	c.unSubHandler = h
 }
 
@@ -414,7 +409,7 @@ func (c *AsyncClient) handleTopicMsg() {
 		select {
 		case <-c.ctx.Done():
 			return
-		case pkt, more := <-c.recvC:
+		case pkt, more := <-c.recvCh:
 			if !more {
 				return
 			}
@@ -431,7 +426,7 @@ func (c *AsyncClient) handleMsg() {
 		select {
 		case <-c.ctx.Done():
 			return
-		case m, more := <-c.msgC:
+		case m, more := <-c.msgCh:
 			if !more {
 				return
 			}
@@ -439,23 +434,23 @@ func (c *AsyncClient) handleMsg() {
 			switch m.what {
 			case pubMsg:
 				if c.pubHandler != nil {
-					go c.pubHandler(m.msg, m.err)
+					c.pubHandler(m.msg, m.err)
 				}
 			case subMsg:
 				if c.subHandler != nil {
-					go c.subHandler(m.obj.([]*Topic), m.err)
+					c.subHandler(m.obj.([]*Topic), m.err)
 				}
 			case unSubMsg:
 				if c.unSubHandler != nil {
-					go c.unSubHandler(m.obj.([]string), m.err)
+					c.unSubHandler(m.obj.([]string), m.err)
 				}
 			case netMsg:
 				if c.netHandler != nil {
-					go c.netHandler(m.msg, m.err)
+					c.netHandler(m.msg, m.err)
 				}
 			case persistMsg:
 				if c.persistHandler != nil {
-					go c.persistHandler(m.err)
+					c.persistHandler(m.err)
 				}
 			}
 		}

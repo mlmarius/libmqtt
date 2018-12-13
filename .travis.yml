@@ -8,20 +8,20 @@ services:
 go:
   - 1.11.x
 
-# install emqttd docker
+addons:
+  apt:
+    update: true
+    packages:
+    - curl
+    - unzip
+
 before_install:
   - export GO111MODULE=on
-  - sudo apt-get -qq update
-  - sudo apt-get install -y curl unzip
-  - curl -fsSL http://emqtt.com/static/brokers/emqttd-docker-v2.3.8.zip -o emqttd-docker-v2.3.8.zip
-  - unzip emqttd-docker-v2.3.8.zip
-  - docker load < emqttd-docker-v2.3.8
 
 before_script:
-  - go get -t -v ./...
-  - make test-reconnect
+  - make test_reconnect
   - bash <(curl -s https://codecov.io/bash)
-  - docker run -d --name emq -p 1883:1883 -p 8083:8083 -p 8883:8883 -p 8084:8084 -p 18083:18083 emqttd-docker-v2.3.8
+  - docker run -d --name libmqtt-test -p 1883:1883 -p 8883:8883 emqx/emqx:latest
   - sleep 120
 
 script:

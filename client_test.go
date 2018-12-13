@@ -24,7 +24,7 @@ import (
 	"go.uber.org/goleak"
 )
 
-// test with emqttd server (http://emqtt.io/ or https://github.com/emqtt/emqttd)
+// test with emqx server (http://emqtt.io/ or https://github.com/emqx/emqx)
 // the server is configured with default configuration
 
 type extraHandler struct {
@@ -79,31 +79,37 @@ func tlsClient(t *testing.T, exH *extraHandler) Client {
 
 func initClient(c Client, exH *extraHandler, t *testing.T) {
 	c.HandlePub(func(topic string, err error) {
+		println("exH.Pub")
 		if err != nil {
 			t.Error(err)
 		}
 
 		if exH != nil && exH.afterPubSuccess != nil {
+			println("afterPubSuccess()")
 			exH.afterPubSuccess()
 		}
 	})
 
 	c.HandleSub(func(topics []*Topic, err error) {
+		println("exH.Sub")
 		if err != nil {
 			t.Error(err)
 		}
 
 		if exH != nil && exH.afterSubSuccess != nil {
+			println("afterSubSuccess()")
 			exH.afterSubSuccess()
 		}
 	})
 
 	c.HandleUnSub(func(topics []string, err error) {
+		println("exH.UnSub")
 		if err != nil {
 			t.Error(err)
 		}
 
 		if exH != nil && exH.afterUnSubSuccess != nil {
+			println("afterUnSubSuccess()")
 			exH.afterUnSubSuccess()
 		}
 	})
@@ -115,51 +121,50 @@ func initClient(c Client, exH *extraHandler, t *testing.T) {
 	})
 }
 
-func testConn(c Client, t *testing.T, afterConnSuccess func()) {
+func conn(c Client, t *testing.T, afterConnSuccess func()) {
 	c.Connect(func(server string, code byte, err error) {
 		if err != nil {
-			t.Error(err)
+			t.Errorf("connect errored: %v", err)
 		}
 
 		if code != CodeSuccess {
-			t.Error(code)
+			t.Errorf("connect failed with code: %d", code)
 		}
 
 		if afterConnSuccess != nil {
+			println("afterConnSuccess()")
 			afterConnSuccess()
 		}
 	})
 }
 
-func testSub(c Client, t *testing.T) {
-	c.Handle(testTopics[0], func(topic string, maxQos byte, msg []byte) {
-		if maxQos != testPubMsgs[0].Qos || bytes.Compare(testPubMsgs[0].Payload, msg) != 0 {
-			t.Error("fail at sub topic =", topic,
-				", content unexcepted, payload =", string(msg),
-				"target payload =", string(testPubMsgs[0].Payload))
-		}
-	})
+func handleTopicAndSub(c Client, t *testing.T) {
+	for i := range testTopics {
+		c.Handle(testTopics[i], func(topic string, maxQos byte, msg []byte) {
+			if maxQos != testPubMsgs[i].Qos || bytes.Compare(testPubMsgs[i].Payload, msg) != 0 {
+				t.Errorf("fail at sub topic = %v, content unexpected, payload = %v, target payload = %v",
+					topic, string(msg), string(testPubMsgs[i].Payload))
+			}
+		})
+	}
 
-	c.Subscribe(testSubTopics[0])
+	c.Subscribe(testSubTopics...)
 }
 
 func TestNewClient(t *testing.T) {
 	_, err := NewClient()
 	if err == nil {
-		t.Error(err)
+		t.Errorf("create new client with no server should fail")
 	}
 
 	_, err = NewClient(
-		WithTLS(
-			"foo",
-			"bar",
-			"foobar",
-			"foo.bar",
-			true),
+		WithTLS("foo", "bar", "foobar", "foo.bar", true),
 	)
 	if err == nil {
-		t.Error(err)
+		t.Errorf("create new client with invalid tls should fail")
 	}
+
+	goleak.VerifyNoLeaks(t)
 }
 
 // conn
@@ -170,11 +175,13 @@ func TestClient_Connect(t *testing.T) {
 	}
 
 	c = plainClient(t, nil)
-	testConn(c, t, afterConn)
+
+	conn(c, t, afterConn)
 	c.Wait()
 
+	// test client with tls
 	c = tlsClient(t, nil)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	goleak.VerifyNoLeaks(t)
@@ -184,7 +191,7 @@ func TestClient_Connect(t *testing.T) {
 func TestClient_Publish(t *testing.T) {
 	var c Client
 	afterConn := func() {
-		c.Publish(testPubMsgs[0])
+		c.Publish(testPubMsgs...)
 	}
 
 	exH := &extraHandler{
@@ -194,11 +201,11 @@ func TestClient_Publish(t *testing.T) {
 	}
 
 	c = plainClient(t, exH)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	c = tlsClient(t, exH)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	goleak.VerifyNoLeaks(t)
@@ -208,12 +215,12 @@ func TestClient_Publish(t *testing.T) {
 func TestClient_Subscribe(t *testing.T) {
 	var c Client
 	afterConn := func() {
-		testSub(c, t)
+		handleTopicAndSub(c, t)
 	}
 
 	extH := &extraHandler{
 		afterSubSuccess: func() {
-			c.Publish(testPubMsgs[0])
+			c.Publish(testPubMsgs...)
 		},
 		afterPubSuccess: func() {
 			c.Destroy(true)
@@ -221,11 +228,11 @@ func TestClient_Subscribe(t *testing.T) {
 	}
 
 	c = plainClient(t, extH)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	c = tlsClient(t, extH)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	goleak.VerifyNoLeaks(t)
@@ -235,7 +242,7 @@ func TestClient_Subscribe(t *testing.T) {
 func TestClient_UnSubscribe(t *testing.T) {
 	var c Client
 	afterConn := func() {
-		testSub(c, t)
+		handleTopicAndSub(c, t)
 	}
 
 	extH := &extraHandler{
@@ -248,11 +255,11 @@ func TestClient_UnSubscribe(t *testing.T) {
 	}
 
 	c = plainClient(t, extH)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	c = tlsClient(t, extH)
-	testConn(c, t, afterConn)
+	conn(c, t, afterConn)
 	c.Wait()
 
 	goleak.VerifyNoLeaks(t)

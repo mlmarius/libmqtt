@@ -23,6 +23,7 @@ import (
 	"io"
 	"math"
 	"sync"
+	"sync/atomic"
 )
 
 // BufferedWriter buffered writer, e.g. bufio.Writer, bytes.Buffer
@@ -53,32 +54,54 @@ func sendKey(packetID uint16) string {
 }
 
 type idGenerator struct {
-	usedIds *sync.Map
+	nextID  uint32
+	usedIDs *sync.Map
+	m       *sync.RWMutex
 }
 
 func newIDGenerator() *idGenerator {
 	return &idGenerator{
-		usedIds: &sync.Map{},
+		nextID:  0,
+		usedIDs: &sync.Map{},
+		m:       &sync.RWMutex{},
 	}
 }
 
 func (g *idGenerator) next(extra interface{}) uint16 {
-	var i uint16
-	for i = 1; i < math.MaxUint16; i++ {
-		if _, ok := g.usedIds.Load(i); !ok {
-			g.usedIds.Store(i, extra)
-			return i
+	var (
+		id     uint16
+		loaded bool
+	)
+
+	id = uint16(atomic.AddUint32(&g.nextID, 1))
+	if id == 0 {
+		atomic.StoreUint32(&g.nextID, 1)
+		id = 1
+	}
+
+	_, loaded = g.usedIDs.LoadOrStore(id, extra)
+
+	if loaded {
+		for i := 0; loaded; id = uint16(atomic.AddUint32(&g.nextID, 1)) {
+			if i == math.MaxUint16 {
+				// id running out, caller should try some time later
+				return 0
+			}
+
+			_, loaded = g.usedIDs.LoadOrStore(id, extra)
+			i++
 		}
 	}
-	return 1
+
+	return uint16(id)
 }
 
 func (g *idGenerator) free(id uint16) {
-	g.usedIds.Delete(id)
+	g.usedIDs.Delete(id)
 }
 
 func (g *idGenerator) getExtra(id uint16) (interface{}, bool) {
-	return g.usedIds.Load(id)
+	return g.usedIDs.Load(id)
 }
 
 func putUint16(d []byte, v uint16) {

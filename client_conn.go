@@ -76,10 +76,10 @@ func (c *clientConn) logic() {
 							}
 						}
 						c.parent.log.d("NET subscribed topics =", originSub.Topics)
-						notifySubMsg(c.parent.msgC, originSub.Topics, nil)
+						notifySubMsg(c.parent.msgCh, originSub.Topics, nil)
 						c.parent.idGen.free(p.PacketID)
 
-						notifyPersistMsg(c.parent.msgC, c.parent.persist.Delete(sendKey(p.PacketID)))
+						notifyPersistMsg(c.parent.msgCh, c.parent.persist.Delete(sendKey(p.PacketID)))
 					}
 				}
 			case *UnSubAckPacket:
@@ -91,17 +91,17 @@ func (c *clientConn) logic() {
 					case *UnSubPacket:
 						originUnSub := originPkt.(*UnSubPacket)
 						c.parent.log.d("NET unSubscribed topics", originUnSub.TopicNames)
-						notifyUnSubMsg(c.parent.msgC, originUnSub.TopicNames, nil)
+						notifyUnSubMsg(c.parent.msgCh, originUnSub.TopicNames, nil)
 						c.parent.idGen.free(p.PacketID)
 
-						notifyPersistMsg(c.parent.msgC, c.parent.persist.Delete(sendKey(p.PacketID)))
+						notifyPersistMsg(c.parent.msgCh, c.parent.persist.Delete(sendKey(p.PacketID)))
 					}
 				}
 			case *PublishPacket:
 				p := pkt.(*PublishPacket)
 				c.parent.log.v("NET received publish, topic =", p.TopicName, "id =", p.PacketID, "QoS =", p.Qos)
 				// received server publish, send to client
-				c.parent.recvC <- p
+				c.parent.recvCh <- p
 
 				// tend to QoS
 				switch p.Qos {
@@ -109,12 +109,12 @@ func (c *clientConn) logic() {
 					c.parent.log.d("NET send PubAck for Publish, id =", p.PacketID)
 					c.send(&PubAckPacket{PacketID: p.PacketID})
 
-					notifyPersistMsg(c.parent.msgC, c.parent.persist.Store(recvKey(p.PacketID), pkt))
+					notifyPersistMsg(c.parent.msgCh, c.parent.persist.Store(recvKey(p.PacketID), pkt))
 				case Qos2:
 					c.parent.log.d("NET send PubRecv for Publish, id =", p.PacketID)
 					c.send(&PubRecvPacket{PacketID: p.PacketID})
 
-					notifyPersistMsg(c.parent.msgC, c.parent.persist.Store(recvKey(p.PacketID), pkt))
+					notifyPersistMsg(c.parent.msgCh, c.parent.persist.Store(recvKey(p.PacketID), pkt))
 				}
 			case *PubAckPacket:
 				p := pkt.(*PubAckPacket)
@@ -126,10 +126,10 @@ func (c *clientConn) logic() {
 						originPub := originPkt.(*PublishPacket)
 						if originPub.Qos == Qos1 {
 							c.parent.log.d("NET published qos1 packet, topic =", originPub.TopicName)
-							notifyPubMsg(c.parent.msgC, originPub.TopicName, nil)
+							notifyPubMsg(c.parent.msgCh, originPub.TopicName, nil)
 							c.parent.idGen.free(p.PacketID)
 
-							notifyPersistMsg(c.parent.msgC, c.parent.persist.Delete(sendKey(p.PacketID)))
+							notifyPersistMsg(c.parent.msgCh, c.parent.persist.Delete(sendKey(p.PacketID)))
 						}
 					}
 				}
@@ -159,7 +159,7 @@ func (c *clientConn) logic() {
 							c.send(&PubCompPacket{PacketID: p.PacketID})
 							c.parent.log.d("NET send PubComp, id =", p.PacketID)
 
-							notifyPersistMsg(c.parent.msgC, c.parent.persist.Store(recvKey(p.PacketID), pkt))
+							notifyPersistMsg(c.parent.msgCh, c.parent.persist.Store(recvKey(p.PacketID), pkt))
 						}
 					}
 				}
@@ -175,10 +175,10 @@ func (c *clientConn) logic() {
 							c.send(&PubRelPacket{PacketID: p.PacketID})
 							c.parent.log.d("NET send PubRel, id =", p.PacketID)
 							c.parent.log.d("NET published qos2 packet, topic =", originPub.TopicName)
-							notifyPubMsg(c.parent.msgC, originPub.TopicName, nil)
+							notifyPubMsg(c.parent.msgCh, originPub.TopicName, nil)
 							c.parent.idGen.free(p.PacketID)
 
-							notifyPersistMsg(c.parent.msgC, c.parent.persist.Delete(sendKey(p.PacketID)))
+							notifyPersistMsg(c.parent.msgCh, c.parent.persist.Delete(sendKey(p.PacketID)))
 						}
 					}
 				}
@@ -243,7 +243,7 @@ func (c *clientConn) handleSend() {
 		select {
 		case <-c.ctx.Done():
 			return
-		case pkt, more := <-c.parent.sendC:
+		case pkt, more := <-c.parent.sendCh:
 			if !more {
 				return
 			}
@@ -263,10 +263,10 @@ func (c *clientConn) handleSend() {
 				p := pkt.(*PublishPacket)
 				if p.Qos == 0 {
 					c.parent.log.d("NET published qos0 packet, topic =", p.TopicName)
-					notifyPubMsg(c.parent.msgC, p.TopicName, nil)
+					notifyPubMsg(c.parent.msgCh, p.TopicName, nil)
 				}
 			case CtrlDisConn:
-				// client exit with disconn
+				// client exit with disconnect
 				c.parent.exit()
 				return
 			}
@@ -287,13 +287,13 @@ func (c *clientConn) handleSend() {
 
 			switch pkt.Type() {
 			case CtrlPubRel:
-				notifyPersistMsg(c.parent.msgC,
+				notifyPersistMsg(c.parent.msgCh,
 					c.parent.persist.Store(sendKey(pkt.(*PubRelPacket).PacketID), pkt))
 			case CtrlPubAck:
-				notifyPersistMsg(c.parent.msgC,
+				notifyPersistMsg(c.parent.msgCh,
 					c.parent.persist.Delete(sendKey(pkt.(*PubAckPacket).PacketID)))
 			case CtrlPubComp:
-				notifyPersistMsg(c.parent.msgC,
+				notifyPersistMsg(c.parent.msgCh,
 					c.parent.persist.Delete(sendKey(pkt.(*PubCompPacket).PacketID)))
 			case CtrlDisConn:
 				// disconnect to server
