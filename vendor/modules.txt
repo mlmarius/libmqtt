@@ -29,6 +29,8 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/gorilla/websocket v1.4.0
+github.com/gorilla/websocket
 # go.uber.org/goleak v0.10.0
 go.uber.org/goleak
 go.uber.org/goleak/internal/stack
