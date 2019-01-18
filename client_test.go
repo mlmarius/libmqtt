@@ -17,9 +17,7 @@
 package libmqtt
 
 import (
-	"bytes"
 	"testing"
-	"time"
 
 	"go.uber.org/goleak"
 )
@@ -27,137 +25,8 @@ import (
 // test with emqx server (http://emqtt.io/ or https://github.com/emqx/emqx)
 // the server is configured with default configuration
 
-type extraHandler struct {
-	afterPubSuccess   func()
-	afterSubSuccess   func()
-	afterUnSubSuccess func()
-}
-
-func plainClient(t *testing.T, exH *extraHandler) Client {
-	c, err := NewClient(
-		WithLog(Verbose),
-		WithServer("localhost:1883"),
-		WithDialTimeout(10),
-		WithKeepalive(10, 1.2),
-		WithIdentity("admin", "public"),
-		WithWill("test", Qos0, false, []byte("test data")),
-		WithAutoReconnect(true),
-		WithBackoffStrategy(1*time.Second, 5*time.Second, 1.5),
-	)
-
-	if err != nil {
-		t.Error(err)
-	}
-	initClient(c, exH, t)
-	return c
-}
-
-func tlsClient(t *testing.T, exH *extraHandler) Client {
-	c, err := NewClient(
-		WithLog(Verbose),
-		WithServer("localhost:8883"),
-		WithTLS(
-			"./testdata/client-cert.pem",
-			"./testdata/client-key.pem",
-			"./testdata/ca-cert.pem",
-			"MacBook-Air.local",
-			true),
-		WithDialTimeout(10),
-		WithKeepalive(10, 1.2),
-		WithIdentity("admin", "public"),
-		WithWill("test", Qos0, false, []byte("test data")),
-		WithAutoReconnect(true),
-		WithBackoffStrategy(1*time.Second, 5*time.Second, 1.5),
-	)
-
-	if err != nil {
-		t.Error(err)
-	}
-	initClient(c, exH, t)
-	return c
-}
-
-func initClient(c Client, exH *extraHandler, t *testing.T) {
-	c.HandlePub(func(topic string, err error) {
-		println("exH.Pub")
-		if err != nil {
-			t.Error(err)
-		}
-
-		if exH != nil && exH.afterPubSuccess != nil {
-			println("afterPubSuccess()")
-			exH.afterPubSuccess()
-		}
-	})
-
-	c.HandleSub(func(topics []*Topic, err error) {
-		println("exH.Sub")
-		if err != nil {
-			t.Error(err)
-		}
-
-		if exH != nil && exH.afterSubSuccess != nil {
-			println("afterSubSuccess()")
-			exH.afterSubSuccess()
-		}
-	})
-
-	c.HandleUnSub(func(topics []string, err error) {
-		println("exH.UnSub")
-		if err != nil {
-			t.Error(err)
-		}
-
-		if exH != nil && exH.afterUnSubSuccess != nil {
-			println("afterUnSubSuccess()")
-			exH.afterUnSubSuccess()
-		}
-	})
-
-	c.HandleNet(func(server string, err error) {
-		if err != nil {
-			t.Error(err)
-		}
-	})
-}
-
-func conn(c Client, t *testing.T, afterConnSuccess func()) {
-	c.Connect(func(server string, code byte, err error) {
-		if err != nil {
-			t.Errorf("connect errored: %v", err)
-		}
-
-		if code != CodeSuccess {
-			t.Errorf("connect failed with code: %d", code)
-		}
-
-		if afterConnSuccess != nil {
-			println("afterConnSuccess()")
-			afterConnSuccess()
-		}
-	})
-}
-
-func handleTopicAndSub(c Client, t *testing.T) {
-	for i := range testTopics {
-		c.Handle(testTopics[i], func(topic string, maxQos byte, msg []byte) {
-			if maxQos != testPubMsgs[i].Qos || bytes.Compare(testPubMsgs[i].Payload, msg) != 0 {
-				t.Errorf("fail at sub topic = %v, content unexpected, payload = %v, target payload = %v",
-					topic, string(msg), string(testPubMsgs[i].Payload))
-			}
-		})
-	}
-
-	c.Subscribe(testSubTopics...)
-}
-
 func TestNewClient(t *testing.T) {
-	_, err := NewClient()
-	if err == nil {
-		t.Errorf("create new client with no server should fail")
-	}
-
-	_, err = NewClient(
+	_, err := NewClient(
 		WithTLS("foo", "bar", "foobar", "foo.bar", true),
 	)
 	if err == nil {
@@ -174,13 +43,17 @@ func TestClient_Connect(t *testing.T) {
 		c.Destroy(true)
 	}
 
-	c = plainClient(t, nil)
+	c = websocketPlainClient(t, nil)
+	c.Wait()
 
+	c = websocketTLSClient(t, nil)
+	c.Wait()
+
+	c = tcpPlainClient(t, nil)
 	conn(c, t, afterConn)
 	c.Wait()
 
-	// test client with tls
-	c = tlsClient(t, nil)
+	c = tcpTLSClient(t, nil)
 	conn(c, t, afterConn)
 	c.Wait()
 
@@ -200,11 +73,17 @@ func TestClient_Publish(t *testing.T) {
 		},
 	}
 
-	c = plainClient(t, exH)
+	c = websocketPlainClient(t, exH)
+	c.Wait()
+
+	c = websocketTLSClient(t, exH)
+	c.Wait()
+
+	c = tcpPlainClient(t, exH)
 	conn(c, t, afterConn)
 	c.Wait()
 
-	c = tlsClient(t, exH)
+	c = tcpTLSClient(t, exH)
 	conn(c, t, afterConn)
 	c.Wait()
 
@@ -227,11 +106,17 @@ func TestClient_Subscribe(t *testing.T) {
 		},
 	}
 
-	c = plainClient(t, extH)
+	c = websocketPlainClient(t, extH)
+	c.Wait()
+
+	c = websocketTLSClient(t, extH)
+	c.Wait()
+
+	c = tcpPlainClient(t, extH)
 	conn(c, t, afterConn)
 	c.Wait()
 
-	c = tlsClient(t, extH)
+	c = tcpTLSClient(t, extH)
 	conn(c, t, afterConn)
 	c.Wait()
 
@@ -254,11 +139,17 @@ func TestClient_UnSubscribe(t *testing.T) {
 		},
 	}
 
-	c = plainClient(t, extH)
+	c = websocketPlainClient(t, extH)
+	c.Wait()
+
+	c = websocketTLSClient(t, extH)
+	c.Wait()
+
+	c = tcpPlainClient(t, extH)
 	conn(c, t, afterConn)
 	c.Wait()
 
-	c = tlsClient(t, extH)
+	c = tcpTLSClient(t, extH)
 	conn(c, t, afterConn)
 	c.Wait()
 

@@ -41,7 +41,7 @@ type clientConn struct {
 // start mqtt logic
 func (c *clientConn) logic() {
 	defer func() {
-		c.conn.Close()
+		_ = c.conn.Close()
 		c.parent.log.e("NET exit logic for server =", c.name)
 	}()
 
@@ -297,7 +297,7 @@ func (c *clientConn) handleSend() {
 					c.parent.persist.Delete(sendKey(pkt.(*PubCompPacket).PacketID)))
 			case CtrlDisConn:
 				// disconnect to server
-				c.conn.Close()
+				_ = c.conn.Close()
 				return
 			}
 		}

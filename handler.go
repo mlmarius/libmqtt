@@ -44,3 +44,33 @@ type NetHandler func(server string, err error)
 
 // PersistHandler handles err happened when persist process has trouble
 type PersistHandler func(err error)
+
+// HandlePub register handler for pub error
+func (c *AsyncClient) HandlePub(h PubHandler) {
+	c.log.d("CLI registered pub handler")
+	c.pubHandler = h
+}
+
+// HandleSub register handler for extra sub info
+func (c *AsyncClient) HandleSub(h SubHandler) {
+	c.log.d("CLI registered sub handler")
+	c.subHandler = h
+}
+
+// HandleUnSub register handler for unsubscribe error
+func (c *AsyncClient) HandleUnSub(h UnSubHandler) {
+	c.log.d("CLI registered unsubscribe handler")
+	c.unSubHandler = h
+}
+
+// HandleNet register handler for net error
+func (c *AsyncClient) HandleNet(h NetHandler) {
+	c.log.d("CLI registered net handler")
+	c.netHandler = h
+}
+
+// HandlePersist register handler for net error
+func (c *AsyncClient) HandlePersist(h PersistHandler) {
+	c.log.d("CLI registered persist handler")
+	c.persistHandler = h
+}

@@ -28,7 +28,10 @@ import (
 )
 
 func TestClient_Reconnect(t *testing.T) {
-	for _, c := range []Client{plainClient(t, nil), tlsClient(t, nil)} {
+	for _, c := range []Client{
+		tcpPlainClient(t, nil),
+		tcpTLSClient(t, nil),
+	} {
 		startTime := time.Now()
 		once := &sync.Once{}
 		var retryCount int32

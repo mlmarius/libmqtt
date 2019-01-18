@@ -42,7 +42,7 @@ func (p *PublishPacket) Bytes() []byte {
 	}
 
 	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 

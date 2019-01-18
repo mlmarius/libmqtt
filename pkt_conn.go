@@ -16,7 +16,10 @@
 
 package libmqtt
 
-import "bytes"
+import (
+	"bytes"
+	"sync"
+)
 
 // ConnPacket is the first packet sent by Client to Server
 type ConnPacket struct {
@@ -40,6 +43,8 @@ type ConnPacket struct {
 	Keepalive   uint16
 	WillTopic   string
 	WillMessage []byte
+
+	mutex sync.RWMutex
 }
 
 // Type ConnPacket's type is CtrlConn
@@ -99,6 +104,32 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 		return err
 	default:
 		return ErrUnsupportedVersion
+	}
+}
+
+func (c *ConnPacket) clone() *ConnPacket {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	willMessageCopy := make([]byte, 0, len(c.WillMessage))
+	_ = copy(willMessageCopy, c.WillMessage)
+
+	return &ConnPacket{
+		BasePacket: BasePacket{
+			ProtoVersion: c.ProtoVersion,
+		},
+		ProtoName:    c.ProtoName,
+		CleanSession: c.CleanSession,
+		IsWill:       c.IsWill,
+		WillQos:      c.WillQos,
+		WillRetain:   c.WillRetain,
+		Username:     c.Username,
+		Password:     c.Password,
+		ClientID:     c.ClientID,
+		Keepalive:    c.Keepalive,
+		WillTopic:    c.WillTopic,
+		WillMessage:  willMessageCopy,
+		Props:        c.Props.clone(),
 	}
 }
 
@@ -202,6 +233,8 @@ type ConnProps struct {
 
 	// The contents of this data are defined by the authentication method.
 	AuthData []byte
+
+	mutex sync.RWMutex
 }
 
 func (c *ConnProps) props() []byte {
@@ -257,6 +290,37 @@ func (c *ConnProps) props() []byte {
 	}
 
 	return result
+}
+
+func (c *ConnProps) clone() *ConnProps {
+	if c == nil {
+		return nil
+	}
+	c.mutex.RUnlock()
+	defer c.mutex.RUnlock()
+
+	authDataCopy := make([]byte, 0, len(c.AuthData))
+	_ = copy(authDataCopy, c.AuthData)
+
+	userPropsCopy := make(UserProps)
+	for k, v := range c.UserProps {
+		userPropsCopy[k] = make([]string, 0)
+		for _, val := range v {
+			userPropsCopy[k] = append(userPropsCopy[k], val)
+		}
+	}
+
+	return &ConnProps{
+		SessionExpiryInterval: c.SessionExpiryInterval,
+		MaxRecv:               c.MaxRecv,
+		MaxPacketSize:         c.MaxPacketSize,
+		MaxTopicAlias:         c.MaxTopicAlias,
+		ReqRespInfo:           c.ReqRespInfo,
+		ReqProblemInfo:        c.ReqProblemInfo,
+		UserProps:             c.UserProps,
+		AuthMethod:            c.AuthMethod,
+		AuthData:              authDataCopy,
+	}
 }
 
 func (c *ConnProps) setProps(props map[byte][]byte) {

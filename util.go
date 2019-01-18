@@ -128,8 +128,7 @@ func writeVarInt(n int, w BufferedWriter) error {
 	}
 
 	if n == 0 {
-		w.WriteByte(0)
-		return nil
+		return w.WriteByte(0)
 	}
 
 	for n > 0 {
@@ -138,7 +137,9 @@ func writeVarInt(n int, w BufferedWriter) error {
 		if n > 0 {
 			encodedByte |= 128
 		}
-		w.WriteByte(encodedByte)
+		if err := w.WriteByte(encodedByte); err != nil {
+			return err
+		}
 	}
 
 	return nil
