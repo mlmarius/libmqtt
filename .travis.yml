@@ -21,7 +21,7 @@ before_install:
 before_script:
   - make test_reconnect
   - bash <(curl -s https://codecov.io/bash)
-  - docker run -d --name libmqtt-test -p 1883:1883 -p 8883:8883 emqx/emqx:latest
+  - docker run -d -p 1883:1883 -p 8883:8883 -p 8083:8083 -p 8084:8084 emqx/emqx:latest
   - sleep 120
 
 script:
