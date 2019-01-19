@@ -17,6 +17,7 @@ type Connector func(ctx context.Context, address string, timeout time.Duration, 
 func WithTCPConnector(handshakeTimeout time.Duration) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
 		options.newConnection = func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (conn net.Conn, e error) {
+			c.log.v("tcpConnect()")
 			return tcpConnect(ctx, address, timeout, handshakeTimeout, tlsConfig)
 		}
 		return nil
@@ -26,6 +27,7 @@ func WithTCPConnector(handshakeTimeout time.Duration) Option {
 func WithWebSocketConnector(handshakeTimeout time.Duration, headers http.Header) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
 		options.newConnection = func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (conn net.Conn, e error) {
+			c.log.v("websocketConnect()")
 			return websocketConnect(ctx, address, timeout, handshakeTimeout, headers, tlsConfig)
 		}
 		return nil

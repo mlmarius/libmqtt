@@ -17,9 +17,8 @@
 package libmqtt
 
 import (
-	"testing"
-
 	"go.uber.org/goleak"
+	"testing"
 )
 
 // test with emqx server (http://emqtt.io/ or https://github.com/emqx/emqx)
@@ -36,122 +35,70 @@ func TestNewClient(t *testing.T) {
 	goleak.VerifyNoLeaks(t)
 }
 
+func testAllClient(t *testing.T, handler *extraHandler) {
+	clients := allClients(t, handler)
+	for client, startTest := range clients {
+		startTest()
+		// time.Sleep(10 * time.Millisecond)
+		client.Wait()
+	}
+}
+
 // conn
 func TestClient_Connect(t *testing.T) {
-	var c Client
-	afterConn := func() {
-		c.Destroy(true)
-	}
-
-	c = websocketPlainClient(t, nil)
-	c.Wait()
-
-	c = websocketTLSClient(t, nil)
-	c.Wait()
-
-	c = tcpPlainClient(t, nil)
-	conn(c, t, afterConn)
-	c.Wait()
-
-	c = tcpTLSClient(t, nil)
-	conn(c, t, afterConn)
-	c.Wait()
+	testAllClient(t, &extraHandler{
+		afterConnSuccess: func(client Client) {
+			client.Destroy(true)
+		},
+	})
 
 	goleak.VerifyNoLeaks(t)
 }
 
 // conn -> pub
 func TestClient_Publish(t *testing.T) {
-	var c Client
-	afterConn := func() {
-		c.Publish(testPubMsgs...)
-	}
-
-	exH := &extraHandler{
-		afterPubSuccess: func() {
+	testAllClient(t, &extraHandler{
+		afterConnSuccess: func(c Client) {
+			c.Publish(testPubMsgs...)
+		},
+		afterPubSuccess: func(c Client) {
 			c.Destroy(true)
 		},
-	}
-
-	c = websocketPlainClient(t, exH)
-	c.Wait()
-
-	c = websocketTLSClient(t, exH)
-	c.Wait()
-
-	c = tcpPlainClient(t, exH)
-	conn(c, t, afterConn)
-	c.Wait()
-
-	c = tcpTLSClient(t, exH)
-	conn(c, t, afterConn)
-	c.Wait()
+	})
 
 	goleak.VerifyNoLeaks(t)
 }
 
 // conn -> sub -> pub
 func TestClient_Subscribe(t *testing.T) {
-	var c Client
-	afterConn := func() {
-		handleTopicAndSub(c, t)
-	}
-
-	extH := &extraHandler{
-		afterSubSuccess: func() {
+	testAllClient(t, &extraHandler{
+		afterConnSuccess: func(c Client) {
+			handleTopicAndSub(c, t)
+		},
+		afterSubSuccess: func(c Client) {
 			c.Publish(testPubMsgs...)
 		},
-		afterPubSuccess: func() {
+		afterPubSuccess: func(c Client) {
 			c.Destroy(true)
 		},
-	}
-
-	c = websocketPlainClient(t, extH)
-	c.Wait()
-
-	c = websocketTLSClient(t, extH)
-	c.Wait()
-
-	c = tcpPlainClient(t, extH)
-	conn(c, t, afterConn)
-	c.Wait()
-
-	c = tcpTLSClient(t, extH)
-	conn(c, t, afterConn)
-	c.Wait()
+	})
 
 	goleak.VerifyNoLeaks(t)
 }
 
 // conn -> sub -> pub -> unSub
 func TestClient_UnSubscribe(t *testing.T) {
-	var c Client
-	afterConn := func() {
-		handleTopicAndSub(c, t)
-	}
-
-	extH := &extraHandler{
-		afterSubSuccess: func() {
+	testAllClient(t, &extraHandler{
+		afterConnSuccess: func(c Client) {
+			handleTopicAndSub(c, t)
+		},
+		afterSubSuccess: func(c Client) {
 			c.UnSubscribe(testTopics...)
 		},
-		afterUnSubSuccess: func() {
+		afterUnSubSuccess: func(c Client) {
 			c.Destroy(true)
 		},
-	}
-
-	c = websocketPlainClient(t, extH)
-	c.Wait()
-
-	c = websocketTLSClient(t, extH)
-	c.Wait()
-
-	c = tcpPlainClient(t, extH)
-	conn(c, t, afterConn)
-	c.Wait()
-
-	c = tcpTLSClient(t, extH)
-	conn(c, t, afterConn)
-	c.Wait()
+	})
 
 	goleak.VerifyNoLeaks(t)
 }

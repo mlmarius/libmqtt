@@ -45,9 +45,9 @@ func Decode(version ProtoVersion, r BufferedReader) (Packet, error) {
 	if bytesToRead == 0 {
 		switch header >> 4 {
 		case CtrlPingReq:
-			return PingReqPacket, nil
+			return &PingReqPacket{}, nil
 		case CtrlPingResp:
-			return PingRespPacket, nil
+			return &PingRespPacket{}, nil
 		case CtrlDisConn:
 			if version == V311 {
 				return &DisConnPacket{}, nil

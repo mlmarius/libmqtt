@@ -83,6 +83,13 @@ func WithBufSize(sendBufSize, recvBufSize int) Option {
 	}
 }
 
+func WithConnHandleFunc(handler ConnHandler) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		options.connHandler = handler
+		return nil
+	}
+}
+
 // WithLog will create basic logger for the client
 func WithLog(l LogLevel) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
@@ -258,7 +265,11 @@ func WithTLS(certFile, keyFile, caCert, serverNameOverride string, skipVerify bo
 // WithCustomTLS replaces the TLS options with a custom tls.Config
 func WithCustomTLS(config *tls.Config) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
-		options.tlsConfig = config
+		if config == nil {
+			options.tlsConfig = nil
+		} else {
+			options.tlsConfig = config.Clone()
+		}
 		return nil
 	}
 }

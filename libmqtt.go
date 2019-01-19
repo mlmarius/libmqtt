@@ -43,11 +43,17 @@ type Packet interface {
 
 	// Version MQTT version of the packet
 	Version() ProtoVersion
+
+	SetVersion(version ProtoVersion)
 }
 
 // BasePacket for packet encoding and MQTT version note
 type BasePacket struct {
 	ProtoVersion ProtoVersion
+}
+
+func (b *BasePacket) SetVersion(version ProtoVersion) {
+	b.ProtoVersion = version
 }
 
 // Version is the MQTT version of this packet

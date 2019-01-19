@@ -11,7 +11,8 @@ import (
 
 // ConnectServer connect to server with connection specific options
 // only return errors happened when applying options
-func (c *AsyncClient) ConnectServer(server string, connHandler ConnHandler, connOptions ...Option) error {
+func (c *AsyncClient) ConnectServer(server string, connOptions ...Option) error {
+	c.log.v("AsyncClient.ConnectServer()")
 	options := c.options.clone()
 
 	for _, setOption := range connOptions {
@@ -21,7 +22,7 @@ func (c *AsyncClient) ConnectServer(server string, connHandler ConnHandler, conn
 	}
 
 	c.workers.Add(1)
-	go options.connect(c, server, options.protoVersion, options.firstDelay, connHandler)
+	go options.connect(c, server, options.protoVersion, options.firstDelay)
 
 	return nil
 }
@@ -50,6 +51,7 @@ func defaultConnectOptions() connectOptions {
 
 // connect options when connecting server (for conn packet)
 type connectOptions struct {
+	connHandler     ConnHandler
 	dialTimeout     time.Duration
 	protoVersion    ProtoVersion
 	protoCompromise bool
@@ -73,8 +75,8 @@ func (c connectOptions) connect(
 	server string,
 	version ProtoVersion,
 	reconnectDelay time.Duration,
-	h ConnHandler,
 ) {
+	parent.log.v("connectOptions.connect()")
 	var (
 		conn net.Conn
 		err  error
@@ -86,8 +88,8 @@ func (c connectOptions) connect(
 	conn, err = c.newConnection(ctx, server, c.dialTimeout, c.tlsConfig)
 	if err != nil {
 		log.e("CLI connect server failed, err =", err, ", server =", server)
-		if h != nil {
-			go h(server, math.MaxUint8, err)
+		if c.connHandler != nil {
+			go c.connHandler(server, math.MaxUint8, err)
 		}
 
 		if c.autoReconnect && !parent.isClosing() {
@@ -129,8 +131,8 @@ func (c connectOptions) connect(
 			return
 		case pkt, more := <-connImpl.netRecvC:
 			if !more {
-				if h != nil {
-					go h(server, math.MaxUint8, ErrDecodeBadPacket)
+				if c.connHandler != nil {
+					go c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
 				}
 				close(connImpl.logicSendC)
 				return
@@ -144,27 +146,27 @@ func (c connectOptions) connect(
 
 					if version > V311 && c.protoCompromise && p.Code == CodeUnsupportedProtoVersion {
 						workers.Add(1)
-						go c.connect(parent, server, version-1, reconnectDelay, h)
+						go c.connect(parent, server, version-1, reconnectDelay)
 						return
 					}
 
-					if h != nil {
-						go h(server, p.Code, nil)
+					if c.connHandler != nil {
+						go c.connHandler(server, p.Code, nil)
 					}
 					return
 				}
 			} else {
 				close(connImpl.logicSendC)
-				if h != nil {
-					go h(server, math.MaxUint8, ErrDecodeBadPacket)
+				if c.connHandler != nil {
+					go c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
 				}
 				return
 			}
 		}
 
 		log.i("CLI connected to server =", server)
-		if h != nil {
-			go h(server, CodeSuccess, nil)
+		if c.connHandler != nil {
+			go c.connHandler(server, CodeSuccess, nil)
 		}
 
 		// start mqtt logic
@@ -189,7 +191,7 @@ reconnect:
 		}
 
 		workers.Add(1)
-		go c.connect(parent, server, version-1, reconnectDelay, h)
+		go c.connect(parent, server, version-1, reconnectDelay)
 	case <-ctx.Done():
 		return
 	}

@@ -41,9 +41,7 @@ func BenchmarkLibmqttClient(b *testing.B) {
 	b.ReportAllocs()
 
 	client, err := lib.NewClient(
-		lib.WithServer(testServer),
 		lib.WithKeepalive(testKeepalive, 1.2),
-		lib.WithBuf(testBufSize, testBufSize),
 		lib.WithCleanSession(true),
 	)
 
@@ -58,21 +56,25 @@ func BenchmarkLibmqttClient(b *testing.B) {
 		client.Destroy(true)
 	})
 
-	b.ResetTimer()
-	client.Connect(func(server string, code byte, err error) {
-		if err != nil {
-			b.Error(err)
-		} else if code != lib.CodeSuccess {
-			b.Error(code)
-		}
-		for i := 0; i < b.N; i++ {
-			client.Publish(&lib.PublishPacket{
-				TopicName: testTopic,
-				Payload:   testTopicMsg,
-			})
-		}
-		client.UnSubscribe(testTopic)
-	})
+	_ = client.ConnectServer(testServer,
+		lib.WithConnHandleFunc(func(server string, code byte, err error) {
+			if err != nil {
+				b.Error(err)
+			} else if code != lib.CodeSuccess {
+				b.Error(code)
+			}
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				client.Publish(&lib.PublishPacket{
+					TopicName: testTopic,
+					Payload:   testTopicMsg,
+				})
+			}
+			client.UnSubscribe(testTopic)
+		}),
+	)
+
 	client.Wait()
 }
 
@@ -94,7 +96,6 @@ func BenchmarkPahoClient(b *testing.B) {
 		Store:               pah.NewMemoryStore(),
 	})
 
-	b.ResetTimer()
 	t := client.Connect()
 	if !t.Wait() {
 		b.Fail()
@@ -104,6 +105,7 @@ func BenchmarkPahoClient(b *testing.B) {
 		b.Error(err)
 	}
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		client.Publish(testTopic, 0, false, testTopicMsg)
 	}

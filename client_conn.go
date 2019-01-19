@@ -204,12 +204,16 @@ func (c *clientConn) keepalive() {
 		c.parent.workers.Done()
 	}()
 
+	pingReq := &PingReqPacket{
+		BasePacket{ProtoVersion: c.protoVersion},
+	}
+
 	for {
 		select {
 		case <-c.ctx.Done():
 			return
 		case <-t.C:
-			c.send(PingReqPacket)
+			c.send(pingReq)
 
 			select {
 			case <-c.ctx.Done():
@@ -232,7 +236,7 @@ func (c *clientConn) keepalive() {
 
 // handle mqtt logic control packet send
 func (c *clientConn) handleSend() {
-	c.parent.log.v("NET start send handle for server = ", c.name)
+	c.parent.log.v("NET clientConn.handleSend() for server = ", c.name)
 
 	defer func() {
 		c.parent.workers.Done()
@@ -248,6 +252,7 @@ func (c *clientConn) handleSend() {
 				return
 			}
 
+			pkt.SetVersion(c.protoVersion)
 			if err := pkt.WriteTo(c.connRW); err != nil {
 				c.parent.log.e("NET encode error", err)
 				return
@@ -275,6 +280,7 @@ func (c *clientConn) handleSend() {
 				return
 			}
 
+			pkt.SetVersion(c.protoVersion)
 			if err := pkt.WriteTo(c.connRW); err != nil {
 				c.parent.log.e("NET encode error", err)
 				return
@@ -306,8 +312,10 @@ func (c *clientConn) handleSend() {
 
 // handle all message receive
 func (c *clientConn) handleRecv() {
+	c.parent.log.v("NET enter clientConn.handleRecv() for server = ", c.name)
+
 	defer func() {
-		c.parent.log.e("NET exit recv handler for server =", c.name)
+		c.parent.log.v("NET exit clientConn.handleRecv() for server =", c.name)
 		close(c.netRecvC)
 		close(c.keepaliveC)
 
@@ -324,16 +332,22 @@ func (c *clientConn) handleRecv() {
 				c.parent.log.e("NET connection broken, server =", c.name, "err =", err)
 
 				// TODO send proper net error to net handler
-
 				// exit client connection
 				c.exit()
 				return
 			}
 
-			if pkt == PingRespPacket {
+			if pkt.Version() != c.protoVersion {
+				// protocol version not match, exit
+				c.exit()
+				return
+			}
+
+			switch pkt.(type) {
+			case *PingRespPacket:
 				c.parent.log.d("NET received keepalive message")
 				c.keepaliveC <- 1
-			} else {
+			default:
 				c.netRecvC <- pkt
 			}
 		}

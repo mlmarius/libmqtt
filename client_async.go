@@ -104,17 +104,22 @@ func (c *AsyncClient) Connect(h ConnHandler) {
 	c.log.d("CLI connect to server, handler =", h)
 
 	for _, s := range c.servers {
+		options := c.options.clone()
+		options.connHandler = h
+
 		c.workers.Add(1)
-		go c.options.connect(c, s, c.options.protoVersion, c.options.firstDelay, h)
+		go options.connect(c, s, c.options.protoVersion, c.options.firstDelay)
 	}
 
 	for _, s := range c.secureServers {
 		secureOptions := c.options.clone()
+		secureOptions.connHandler = h
 		secureOptions.tlsConfig = &tls.Config{
 			ServerName: strings.SplitN(s, ":", 1)[0],
 		}
+
 		c.workers.Add(1)
-		go secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay, h)
+		go secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay)
 	}
 
 	c.workers.Add(2)

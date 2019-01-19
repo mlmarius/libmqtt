@@ -7,35 +7,35 @@ import (
 )
 
 type extraHandler struct {
-	afterPubSuccess   func()
-	afterSubSuccess   func()
-	afterUnSubSuccess func()
+	onConnHandle      func(client Client, server string, code byte, err error) bool
+	afterConnSuccess  func(client Client)
+	afterPubSuccess   func(client Client)
+	afterSubSuccess   func(client Client)
+	afterUnSubSuccess func(client Client)
 }
 
-func websocketPlainClient(t *testing.T, exH *extraHandler) Client {
-	c, err := NewClient(WithLog(Verbose))
-	if err != nil {
-		t.Error("create client failed")
-	}
+func testTLSOption() Option {
+	return WithTLS(
+		"./testdata/client-cert.pem",
+		"./testdata/client-key.pem",
+		"./testdata/ca-cert.pem",
+		"MacBook-Air.local",
+		true)
+}
 
-	if err != nil {
-		t.Error(err)
-	}
-	initClient(c, exH, t)
+func baseClient(t *testing.T, handler *extraHandler) Client {
+	var (
+		c   Client
+		err error
+	)
 
-	err = c.ConnectServer("localhost:8083/mqtt",
-		func(server string, code byte, err error) {
-			if err != nil {
-				t.Errorf("connect errored: %v", err)
-			}
-
-			if code != CodeSuccess {
-				t.Errorf("connect failed with code: %d", code)
-			}
-
-			c.Destroy(true)
-		},
-		WithWebSocketConnector(0, nil),
+	c, err = NewClient(
+		WithLog(Verbose),
+		WithConnHandleFunc(testConnHandler(c, t, handler)),
+		WithDialTimeout(10),
+		WithKeepalive(10, 1.2),
+		WithAutoReconnect(true),
+		WithBackoffStrategy(1*time.Second, 5*time.Second, 1.5),
 		WithConnPacket(ConnPacket{
 			Username:    "admin",
 			Password:    "public",
@@ -45,115 +45,97 @@ func websocketPlainClient(t *testing.T, exH *extraHandler) Client {
 			WillMessage: []byte("test data"),
 		}),
 	)
-
 	if err != nil {
-		t.Error(err)
+		panic("create baseClient failed")
 	}
 
+	initClient(c, handler, t)
 	return c
 }
 
-func websocketTLSClient(t *testing.T, exH *extraHandler) Client {
-	c, err := NewClient(WithLog(Verbose))
-	if err != nil {
-		t.Error("create client failed")
-	}
-
-	if err != nil {
-		t.Error(err)
-	}
-	initClient(c, exH, t)
-
-	err = c.ConnectServer("localhost:8084/mqtt",
-		func(server string, code byte, err error) {
-			if err != nil {
-				t.Errorf("connect errored: %v", err)
+func testConnHandler(c Client, t *testing.T, exH *extraHandler) ConnHandler {
+	return func(server string, code byte, err error) {
+		if exH != nil && exH.onConnHandle != nil {
+			println("onConnHandle()")
+			if exH.onConnHandle(c, server, code, err) {
+				return
 			}
+		}
 
-			if code != CodeSuccess {
-				t.Errorf("connect failed with code: %d", code)
-			}
+		if err != nil {
+			t.Errorf("connect errored: %v", err)
+		}
 
-			c.Destroy(true)
-		},
-		WithTLS(
-			"./testdata/client-cert.pem",
-			"./testdata/client-key.pem",
-			"./testdata/ca-cert.pem",
-			"MacBook-Air.local",
-			true),
-		WithWebSocketConnector(0, nil),
-		WithConnPacket(ConnPacket{
-			Username:    "admin",
-			Password:    "public",
-			WillTopic:   "test",
-			WillQos:     Qos0,
-			WillRetain:  false,
-			WillMessage: []byte("test data"),
-		}),
-	)
+		if code != CodeSuccess {
+			t.Errorf("connect failed with code: %d", code)
+		}
 
-	if err != nil {
-		t.Error(err)
+		if exH != nil && exH.afterConnSuccess != nil {
+			println("afterConnSuccess()")
+			exH.afterConnSuccess(c)
+		}
 	}
-
-	return c
 }
 
-func tcpPlainClient(t *testing.T, exH *extraHandler) Client {
-	c, err := NewClient(
-		WithLog(Verbose),
-		WithServer("localhost:1883"),
-		WithDialTimeout(10),
-		WithKeepalive(10, 1.2),
-		WithIdentity("admin", "public"),
-		WithWill("test", Qos0, false, []byte("test data")),
-		WithAutoReconnect(true),
-		WithBackoffStrategy(1*time.Second, 5*time.Second, 1.5),
-	)
-
-	if err != nil {
-		t.Error(err)
+func websocketPlainClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
+	c = baseClient(t, exH)
+	connFunc = func() {
+		if err := c.ConnectServer("localhost:8083",
+			WithWebSocketConnector(0, nil),
+		); err != nil {
+			t.Error(err)
+		}
 	}
-	initClient(c, exH, t)
-	return c
+
+	return
 }
 
-func tcpTLSClient(t *testing.T, exH *extraHandler) Client {
-	c, err := NewClient(
-		WithLog(Verbose),
-		WithServer("localhost:8883"),
-		WithTLS(
-			"./testdata/client-cert.pem",
-			"./testdata/client-key.pem",
-			"./testdata/ca-cert.pem",
-			"MacBook-Air.local",
-			true),
-		WithDialTimeout(10),
-		WithKeepalive(10, 1.2),
-		WithIdentity("admin", "public"),
-		WithWill("test", Qos0, false, []byte("test data")),
-		WithAutoReconnect(true),
-		WithBackoffStrategy(1*time.Second, 5*time.Second, 1.5),
-	)
-
-	if err != nil {
-		t.Error(err)
+func websocketTLSClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
+	c = baseClient(t, exH)
+	connFunc = func() {
+		if err := c.ConnectServer("localhost:8084/mqtt",
+			testTLSOption(),
+			WithWebSocketConnector(0, nil),
+		); err != nil {
+			t.Error(err)
+		}
 	}
-	initClient(c, exH, t)
-	return c
+
+	return
+}
+
+func tcpPlainClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
+	c = baseClient(t, exH)
+	connFunc = func() {
+		if err := c.ConnectServer("localhost:1883"); err != nil {
+			t.Error(err)
+		}
+	}
+
+	return
+}
+
+func tcpTLSClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
+	c = baseClient(t, exH)
+	connFunc = func() {
+		if err := c.ConnectServer("localhost:8883",
+			testTLSOption(),
+		); err != nil {
+			t.Error(err)
+		}
+	}
+	return
 }
 
 func initClient(c Client, exH *extraHandler, t *testing.T) {
 	c.HandlePub(func(topic string, err error) {
-		println("exH.Pub")
 		if err != nil {
 			t.Error(err)
 		}
 
 		if exH != nil && exH.afterPubSuccess != nil {
 			println("afterPubSuccess()")
-			exH.afterPubSuccess()
+			exH.afterPubSuccess(c)
 		}
 	})
 
@@ -165,7 +147,7 @@ func initClient(c Client, exH *extraHandler, t *testing.T) {
 
 		if exH != nil && exH.afterSubSuccess != nil {
 			println("afterSubSuccess()")
-			exH.afterSubSuccess()
+			exH.afterSubSuccess(c)
 		}
 	})
 
@@ -177,7 +159,7 @@ func initClient(c Client, exH *extraHandler, t *testing.T) {
 
 		if exH != nil && exH.afterUnSubSuccess != nil {
 			println("afterUnSubSuccess()")
-			exH.afterUnSubSuccess()
+			exH.afterUnSubSuccess(c)
 		}
 	})
 
@@ -188,21 +170,18 @@ func initClient(c Client, exH *extraHandler, t *testing.T) {
 	})
 }
 
-func conn(c Client, t *testing.T, afterConnSuccess func()) {
-	c.Connect(func(server string, code byte, err error) {
-		if err != nil {
-			t.Errorf("connect errored: %v", err)
-		}
+func allClients(t *testing.T, handler *extraHandler) map[Client]func() {
+	ret := make(map[Client]func())
+	ws, wsC := websocketPlainClient(t, handler)
+	ret[ws] = wsC
+	wss, wssC := websocketTLSClient(t, handler)
+	ret[wss] = wssC
+	tcp, tcpC := tcpPlainClient(t, handler)
+	ret[tcp] = tcpC
+	tcps, tcpsC := tcpTLSClient(t, handler)
+	ret[tcps] = tcpsC
 
-		if code != CodeSuccess {
-			t.Errorf("connect failed with code: %d", code)
-		}
-
-		if afterConnSuccess != nil {
-			println("afterConnSuccess()")
-			afterConnSuccess()
-		}
-	})
+	return ret
 }
 
 func handleTopicAndSub(c Client, t *testing.T) {

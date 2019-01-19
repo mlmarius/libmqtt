@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	testPingReqMsg       = PingReqPacket
+	testPingReqMsg       = &PingReqPacket{}
 	testPingReqMsgBytes  []byte
-	testPingRespMsg      = PingRespPacket
+	testPingRespMsg      = &PingRespPacket{}
 	testPingRespMsgBytes []byte
 )
 

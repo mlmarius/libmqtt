@@ -18,13 +18,6 @@ package libmqtt
 
 import "bytes"
 
-var (
-	// PingReqPacket is the final instance of pingReqPacket
-	PingReqPacket = &pingReqPacket{}
-	// PingRespPacket is the final instance of pingRespPacket
-	PingRespPacket = &pingRespPacket{}
-)
-
 // pingReqPacket is sent from a Client to the Server.
 //
 // It can be used to:
@@ -33,15 +26,15 @@ var (
 // 		3. Exercise the network to indicate that the Network Connection is active.
 //
 // This Packet is used in Keep Alive processing
-type pingReqPacket struct {
+type PingReqPacket struct {
 	BasePacket
 }
 
-func (p *pingReqPacket) Type() CtrlType {
+func (p *PingReqPacket) Type() CtrlType {
 	return CtrlPingReq
 }
 
-func (p *pingReqPacket) Bytes() []byte {
+func (p *PingReqPacket) Bytes() []byte {
 	if p == nil {
 		return nil
 	}
@@ -51,7 +44,7 @@ func (p *pingReqPacket) Bytes() []byte {
 	return w.Bytes()
 }
 
-func (p *pingReqPacket) WriteTo(w BufferedWriter) error {
+func (p *PingReqPacket) WriteTo(w BufferedWriter) error {
 	if p == nil {
 		return ErrEncodeBadPacket
 	}
@@ -67,15 +60,15 @@ func (p *pingReqPacket) WriteTo(w BufferedWriter) error {
 
 // pingRespPacket is sent by the Server to the Client in response to
 // a pingReqPacket. It indicates that the Server is alive.
-type pingRespPacket struct {
+type PingRespPacket struct {
 	BasePacket
 }
 
-func (p *pingRespPacket) Type() CtrlType {
+func (p *PingRespPacket) Type() CtrlType {
 	return CtrlPingResp
 }
 
-func (p *pingRespPacket) Bytes() []byte {
+func (p *PingRespPacket) Bytes() []byte {
 	if p == nil {
 		return nil
 	}
@@ -85,7 +78,7 @@ func (p *pingRespPacket) Bytes() []byte {
 	return w.Bytes()
 }
 
-func (p *pingRespPacket) WriteTo(w BufferedWriter) error {
+func (p *PingRespPacket) WriteTo(w BufferedWriter) error {
 	if p == nil {
 		return ErrEncodeBadPacket
 	}
