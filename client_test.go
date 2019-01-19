@@ -48,7 +48,7 @@ func testAllClient(t *testing.T, handler *extraHandler) {
 func TestClient_Connect(t *testing.T) {
 	testAllClient(t, &extraHandler{
 		afterConnSuccess: func(client Client) {
-			client.Destroy(true)
+			client.Destroy(false)
 		},
 	})
 

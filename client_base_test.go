@@ -31,7 +31,7 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 
 	c, err = NewClient(
 		WithLog(Verbose),
-		WithConnHandleFunc(testConnHandler(&c, t, handler)),
+		// WithVersion(V5, true),
 		WithDialTimeout(10),
 		WithKeepalive(10, 1.2),
 		WithAutoReconnect(true),
@@ -44,55 +44,52 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 			WillRetain:  false,
 			WillMessage: []byte("test data"),
 		}),
+		WithConnHandleFunc(testConnHandler(&c, t, handler)),
+		WithPubHandleFunc(func(topic string, err error) {
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
+
+			if handler != nil && handler.afterPubSuccess != nil {
+				println("afterPubSuccess()")
+				handler.afterPubSuccess(c)
+			}
+		}),
+		WithSubHandleFunc(func(topics []*Topic, err error) {
+			println("exH.Sub")
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
+
+			if handler != nil && handler.afterSubSuccess != nil {
+				println("afterSubSuccess()")
+				handler.afterSubSuccess(c)
+			}
+		}),
+		WithUnSubHandleFunc(func(topics []string, err error) {
+			println("exH.UnSub")
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
+
+			if handler != nil && handler.afterUnSubSuccess != nil {
+				println("afterUnSubSuccess()")
+				handler.afterUnSubSuccess(c)
+			}
+		}),
+		WithNetHandleFunc(func(server string, err error) {
+			if err != nil {
+				t.Error(err)
+				t.FailNow()
+			}
+		}),
 	)
 	if err != nil {
 		panic("create baseClient failed")
 	}
-
-	c.HandlePub(func(topic string, err error) {
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
-
-		if handler != nil && handler.afterPubSuccess != nil {
-			println("afterPubSuccess()")
-			handler.afterPubSuccess(c)
-		}
-	})
-
-	c.HandleSub(func(topics []*Topic, err error) {
-		println("exH.Sub")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
-
-		if handler != nil && handler.afterSubSuccess != nil {
-			println("afterSubSuccess()")
-			handler.afterSubSuccess(c)
-		}
-	})
-
-	c.HandleUnSub(func(topics []string, err error) {
-		println("exH.UnSub")
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
-
-		if handler != nil && handler.afterUnSubSuccess != nil {
-			println("afterUnSubSuccess()")
-			handler.afterUnSubSuccess(c)
-		}
-	})
-
-	c.HandleNet(func(server string, err error) {
-		if err != nil {
-			t.Error(err)
-			t.FailNow()
-		}
-	})
 
 	return c
 }
