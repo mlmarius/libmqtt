@@ -19,18 +19,14 @@
 package libmqtt
 
 import (
-	"sync"
+	"go.uber.org/goleak"
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
-
-	"go.uber.org/goleak"
 )
 
 func TestClient_Reconnect(t *testing.T) {
 	var retryCount int32
-	var once **sync.Once
 	clients := allClients(t, &extraHandler{
 		onConnHandle: func(c Client, server string, code byte, err error) bool {
 			if err != nil {
@@ -41,22 +37,20 @@ func TestClient_Reconnect(t *testing.T) {
 				t.Log("connect to server failed", code)
 			}
 
-			(*once).Do(func() {
-				atomic.StoreInt32(&retryCount, 0)
-				time.Sleep(7 * time.Second)
-				t.Log("Destroy client")
-				c.Destroy(true)
-			})
 			atomic.AddInt32(&retryCount, 1)
 			return true
 		},
 	})
 
-	onceP := unsafe.Pointer(once)
 	for client, connect := range clients {
-		newOnce := &sync.Once{}
-		atomic.StorePointer(&onceP, unsafe.Pointer(&newOnce))
 		startTime := time.Now()
+		atomic.StoreInt32(&retryCount, 0)
+
+		go func() {
+			time.Sleep(7 * time.Second)
+			t.Log("Destroy client")
+			client.Destroy(true)
+		}()
 
 		connect()
 		client.Wait()
