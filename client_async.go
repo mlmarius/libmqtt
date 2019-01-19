@@ -37,6 +37,10 @@ func NewClient(options ...Option) (Client, error) {
 		}
 	}
 
+	c.workers.Add(2)
+	go c.handleTopicMsg()
+	go c.handleMsg()
+
 	return c, nil
 }
 
@@ -121,10 +125,6 @@ func (c *AsyncClient) Connect(h ConnHandler) {
 		c.workers.Add(1)
 		go secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay)
 	}
-
-	c.workers.Add(2)
-	go c.handleTopicMsg()
-	go c.handleMsg()
 }
 
 // Publish message(s) to topic(s), one to one
@@ -209,6 +209,7 @@ func (c *AsyncClient) Disconnect(server string, packet *DisConnPacket) {
 		packet = &DisConnPacket{}
 	}
 
+	// TODO: more graceful per server disconnect
 	c.sendCh <- packet
 }
 
