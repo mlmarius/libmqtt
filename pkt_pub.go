@@ -51,8 +51,8 @@ func (p *PublishPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
+	switch p.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlPublish<<4) | boolToByte(p.IsDup)<<3 | boolToByte(p.IsRetain) | p.Qos<<1)
 		payload := p.payload()
 		writeVarInt(len(payload), w)
@@ -252,8 +252,8 @@ func (p *PubAckPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
+	switch p.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlPubAck << 4))
 		w.WriteByte(2)
 		w.WriteByte(byte(p.PacketID >> 8))
@@ -348,8 +348,8 @@ func (p *PubRecvPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
+	switch p.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlPubRecv << 4))
 		w.WriteByte(2)
 		w.WriteByte(byte(p.PacketID >> 8))
@@ -443,8 +443,8 @@ func (p *PubRelPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
+	switch p.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlPubRel<<4 | 0x02))
 		w.WriteByte(2)
 		w.WriteByte(byte(p.PacketID >> 8))
@@ -539,8 +539,8 @@ func (p *PubCompPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
+	switch p.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlPubComp << 4))
 		w.WriteByte(2)
 		w.WriteByte(byte(p.PacketID >> 8))

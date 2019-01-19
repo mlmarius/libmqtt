@@ -69,7 +69,7 @@ func initTestData_Pub() {
 		}).(*std.PublishPacket)
 		pkt.TopicName = testTopics[i]
 		pkt.Payload = []byte(testTopicMsgs[i])
-		pkt.MessageID = testPacketID
+		pkt.MessageID = uint16(i)
 
 		buf := &bytes.Buffer{}
 		pkt.Write(buf)

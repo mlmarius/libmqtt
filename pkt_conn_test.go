@@ -49,8 +49,8 @@ var (
 	}
 
 	testConnAckMsg = &ConnAckPacket{
-		Present: testConnackPresent,
-		Code:    testConnackCode,
+		Present: testConnAckPresent,
+		Code:    testConnAckCode,
 	}
 
 	testDisConnMsg = &DisConnPacket{}
@@ -106,8 +106,8 @@ func initTestData_Conn() {
 
 	// connack
 	connackPkt := std.NewControlPacket(std.Connack).(*std.ConnackPacket)
-	connackPkt.SessionPresent = testConnackPresent
-	connackPkt.ReturnCode = testConnackCode
+	connackPkt.SessionPresent = testConnAckPresent
+	connackPkt.ReturnCode = testConnAckCode
 	connAckBuf := &bytes.Buffer{}
 	connackPkt.Write(connAckBuf)
 	testConnAckMsgBytesV311 = connAckBuf.Bytes()

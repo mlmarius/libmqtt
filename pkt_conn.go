@@ -67,8 +67,8 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch c.ProtoVersion {
-	case 0, V311:
+	switch c.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlConn << 4))
 		payload := c.payload()
 		if err := writeVarInt(len(payload)+10, w); err != nil {
@@ -396,8 +396,8 @@ func (c *ConnAckPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch c.ProtoVersion {
-	case 0, V311:
+	switch c.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlConnAck << 4))
 		w.WriteByte(2)
 		w.WriteByte(boolToByte(c.Present))
@@ -687,8 +687,8 @@ func (d *DisConnPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch d.ProtoVersion {
-	case 0, V311:
+	switch d.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlDisConn << 4))
 		return w.WriteByte(0x00)
 	case V5:

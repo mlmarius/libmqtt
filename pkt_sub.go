@@ -53,8 +53,8 @@ func (s *SubscribePacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch s.ProtoVersion {
-	case 0, V311:
+	switch s.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlSubscribe<<4 | 0x02))
 		payload := s.payload()
 		if err := writeVarInt(len(payload)+2, w); err != nil {
@@ -175,8 +175,8 @@ func (s *SubAckPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch s.ProtoVersion {
-	case 0, V311:
+	switch s.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlSubAck << 4))
 		payload := s.payload()
 		if err := writeVarInt(len(payload)+2, w); err != nil {
@@ -283,8 +283,8 @@ func (s *UnSubPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch s.ProtoVersion {
-	case 0, V311:
+	switch s.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlUnSub<<4 | 0x02))
 		payload := s.payload()
 		if err := writeVarInt(len(payload)+2, w); err != nil {
@@ -382,8 +382,8 @@ func (s *UnSubAckPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch s.ProtoVersion {
-	case 0, V311:
+	switch s.Version() {
+	case V311:
 		w.WriteByte(byte(CtrlUnSubAck << 4))
 		w.WriteByte(0x02)
 		w.WriteByte(byte(s.PacketID >> 8))

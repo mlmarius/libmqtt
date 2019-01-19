@@ -49,8 +49,8 @@ func (p *PingReqPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311, V5:
+	switch p.Version() {
+	case V311, V5:
 		w.WriteByte(byte(CtrlPingReq << 4))
 		return w.WriteByte(0x00)
 	default:
@@ -83,8 +83,8 @@ func (p *PingRespPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311, V5:
+	switch p.Version() {
+	case V311, V5:
 		w.WriteByte(byte(CtrlPingResp << 4))
 		return w.WriteByte(0x00)
 	default:
