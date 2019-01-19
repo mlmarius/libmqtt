@@ -238,13 +238,26 @@ func (c *clientConn) keepalive() {
 func (c *clientConn) handleSend() {
 	c.parent.log.v("NET clientConn.handleSend() for server = ", c.name)
 
+	flushSig := time.NewTimer(time.Millisecond)
+	forceFlushSig := time.NewTicker(time.Second)
 	defer func() {
+		flushSig.Stop()
 		c.parent.workers.Done()
 		c.parent.log.e("NET exit send handler for server =", c.name)
 	}()
 
 	for {
 		select {
+		case <-forceFlushSig.C:
+			if err := c.connRW.Flush(); err != nil {
+				c.parent.log.e("NET flush error", err)
+				return
+			}
+		case <-flushSig.C:
+			if err := c.connRW.Flush(); err != nil {
+				c.parent.log.e("NET flush error", err)
+				return
+			}
 		case <-c.ctx.Done():
 			return
 		case pkt, more := <-c.parent.sendCh:
@@ -257,20 +270,16 @@ func (c *clientConn) handleSend() {
 				c.parent.log.e("NET encode error", err)
 				return
 			}
+			flushSig.Reset(time.Millisecond)
 
-			if err := c.connRW.Flush(); err != nil {
-				c.parent.log.e("NET flush error", err)
-				return
-			}
-
-			switch pkt.Type() {
-			case CtrlPublish:
+			switch pkt.(type) {
+			case *PublishPacket:
 				p := pkt.(*PublishPacket)
 				if p.Qos == 0 {
 					c.parent.log.d("NET published qos0 packet, topic =", p.TopicName)
 					notifyPubMsg(c.parent.msgCh, p.TopicName, nil)
 				}
-			case CtrlDisConn:
+			case *DisConnPacket:
 				// client exit with disconnect
 				c.parent.exit()
 				return
@@ -285,23 +294,19 @@ func (c *clientConn) handleSend() {
 				c.parent.log.e("NET encode error", err)
 				return
 			}
+			flushSig.Reset(time.Millisecond)
 
-			if err := c.connRW.Flush(); err != nil {
-				c.parent.log.e("NET flush error", err)
-				return
-			}
-
-			switch pkt.Type() {
-			case CtrlPubRel:
+			switch pkt.(type) {
+			case *PubRelPacket:
 				notifyPersistMsg(c.parent.msgCh,
 					c.parent.persist.Store(sendKey(pkt.(*PubRelPacket).PacketID), pkt))
-			case CtrlPubAck:
+			case *PubAckPacket:
 				notifyPersistMsg(c.parent.msgCh,
 					c.parent.persist.Delete(sendKey(pkt.(*PubAckPacket).PacketID)))
-			case CtrlPubComp:
+			case *PubCompPacket:
 				notifyPersistMsg(c.parent.msgCh,
 					c.parent.persist.Delete(sendKey(pkt.(*PubCompPacket).PacketID)))
-			case CtrlDisConn:
+			case *DisConnPacket:
 				// disconnect to server
 				_ = c.conn.Close()
 				return

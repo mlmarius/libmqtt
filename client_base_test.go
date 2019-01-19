@@ -31,7 +31,7 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 
 	c, err = NewClient(
 		WithLog(Verbose),
-		WithConnHandleFunc(testConnHandler(c, t, handler)),
+		WithConnHandleFunc(testConnHandler(&c, t, handler)),
 		WithDialTimeout(10),
 		WithKeepalive(10, 1.2),
 		WithAutoReconnect(true),
@@ -49,30 +49,76 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 		panic("create baseClient failed")
 	}
 
-	initClient(c, handler, t)
+	c.HandlePub(func(topic string, err error) {
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if handler != nil && handler.afterPubSuccess != nil {
+			println("afterPubSuccess()")
+			handler.afterPubSuccess(c)
+		}
+	})
+
+	c.HandleSub(func(topics []*Topic, err error) {
+		println("exH.Sub")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if handler != nil && handler.afterSubSuccess != nil {
+			println("afterSubSuccess()")
+			handler.afterSubSuccess(c)
+		}
+	})
+
+	c.HandleUnSub(func(topics []string, err error) {
+		println("exH.UnSub")
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+
+		if handler != nil && handler.afterUnSubSuccess != nil {
+			println("afterUnSubSuccess()")
+			handler.afterUnSubSuccess(c)
+		}
+	})
+
+	c.HandleNet(func(server string, err error) {
+		if err != nil {
+			t.Error(err)
+			t.FailNow()
+		}
+	})
+
 	return c
 }
 
-func testConnHandler(c Client, t *testing.T, exH *extraHandler) ConnHandler {
+func testConnHandler(c *Client, t *testing.T, exH *extraHandler) ConnHandler {
 	return func(server string, code byte, err error) {
 		if exH != nil && exH.onConnHandle != nil {
 			println("onConnHandle()")
-			if exH.onConnHandle(c, server, code, err) {
+			if exH.onConnHandle(*c, server, code, err) {
 				return
 			}
 		}
 
 		if err != nil {
 			t.Errorf("connect errored: %v", err)
+			t.FailNow()
 		}
 
 		if code != CodeSuccess {
 			t.Errorf("connect failed with code: %d", code)
+			t.FailNow()
 		}
 
 		if exH != nil && exH.afterConnSuccess != nil {
 			println("afterConnSuccess()")
-			exH.afterConnSuccess(c)
+			exH.afterConnSuccess(*c)
 		}
 	}
 }
@@ -80,7 +126,7 @@ func testConnHandler(c Client, t *testing.T, exH *extraHandler) ConnHandler {
 func websocketPlainClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
 	c = baseClient(t, exH)
 	connFunc = func() {
-		if err := c.ConnectServer("localhost:8083",
+		if err := c.ConnectServer("localhost:8083/mqtt",
 			WithWebSocketConnector(0, nil),
 		); err != nil {
 			t.Error(err)
@@ -127,59 +173,19 @@ func tcpTLSClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
 	return
 }
 
-func initClient(c Client, exH *extraHandler, t *testing.T) {
-	c.HandlePub(func(topic string, err error) {
-		if err != nil {
-			t.Error(err)
-		}
-
-		if exH != nil && exH.afterPubSuccess != nil {
-			println("afterPubSuccess()")
-			exH.afterPubSuccess(c)
-		}
-	})
-
-	c.HandleSub(func(topics []*Topic, err error) {
-		println("exH.Sub")
-		if err != nil {
-			t.Error(err)
-		}
-
-		if exH != nil && exH.afterSubSuccess != nil {
-			println("afterSubSuccess()")
-			exH.afterSubSuccess(c)
-		}
-	})
-
-	c.HandleUnSub(func(topics []string, err error) {
-		println("exH.UnSub")
-		if err != nil {
-			t.Error(err)
-		}
-
-		if exH != nil && exH.afterUnSubSuccess != nil {
-			println("afterUnSubSuccess()")
-			exH.afterUnSubSuccess(c)
-		}
-	})
-
-	c.HandleNet(func(server string, err error) {
-		if err != nil {
-			t.Error(err)
-		}
-	})
-}
-
 func allClients(t *testing.T, handler *extraHandler) map[Client]func() {
 	ret := make(map[Client]func())
-	ws, wsC := websocketPlainClient(t, handler)
-	ret[ws] = wsC
-	wss, wssC := websocketTLSClient(t, handler)
-	ret[wss] = wssC
+	// tcp based
 	tcp, tcpC := tcpPlainClient(t, handler)
 	ret[tcp] = tcpC
 	tcps, tcpsC := tcpTLSClient(t, handler)
 	ret[tcps] = tcpsC
+
+	// websocket based
+	ws, wsC := websocketPlainClient(t, handler)
+	ret[ws] = wsC
+	wss, wssC := websocketTLSClient(t, handler)
+	ret[wss] = wssC
 
 	return ret
 }
@@ -190,6 +196,7 @@ func handleTopicAndSub(c Client, t *testing.T) {
 			if maxQos != testPubMsgs[i].Qos || bytes.Compare(testPubMsgs[i].Payload, msg) != 0 {
 				t.Errorf("fail at sub topic = %v, content unexpected, payload = %v, target payload = %v",
 					topic, string(msg), string(testPubMsgs[i].Payload))
+				t.FailNow()
 			}
 		})
 	}

@@ -138,7 +138,8 @@ func (c connectOptions) connect(
 				return
 			}
 
-			if pkt.Type() == CtrlConnAck {
+			switch pkt.(type) {
+			case *ConnAckPacket:
 				p := pkt.(*ConnAckPacket)
 
 				if p.Code != CodeSuccess {
@@ -155,7 +156,7 @@ func (c connectOptions) connect(
 					}
 					return
 				}
-			} else {
+			default:
 				close(connImpl.logicSendC)
 				if c.connHandler != nil {
 					go c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
@@ -199,6 +200,7 @@ reconnect:
 
 func (c connectOptions) clone() connectOptions {
 	return connectOptions{
+		connHandler:      c.connHandler,
 		dialTimeout:      c.dialTimeout,
 		protoVersion:     c.protoVersion,
 		protoCompromise:  c.protoCompromise,

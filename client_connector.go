@@ -1,12 +1,13 @@
 package libmqtt
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
-	"io"
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -105,28 +106,23 @@ func tcpConnect(ctx context.Context, address string, timeout, handshakeTimeout t
 }
 
 type wsConn struct {
-	conn *websocket.Conn
+	conn    *websocket.Conn
+	readBuf bytes.Buffer
+	mutex   sync.Mutex
 }
 
-func (c *wsConn) Read(b []byte) (n int, err error) {
-	_, reader, err := c.conn.NextReader()
+func (c *wsConn) Read(b []byte) (int, error) {
+	_, data, err := c.conn.ReadMessage()
 	if err != nil {
 		return 0, err
 	}
-	return io.ReadFull(reader, b)
+	return copy(b, data), err
 }
 
 func (c *wsConn) Write(b []byte) (n int, err error) {
-	w, err := c.conn.NextWriter(websocket.BinaryMessage)
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		if e := w.Close(); e != nil && err == nil {
-			err = e
-		}
-	}()
-	return w.Write(b)
+	n = len(b)
+	err = c.conn.WriteMessage(websocket.BinaryMessage, b)
+	return
 }
 
 func (c *wsConn) Close() error {

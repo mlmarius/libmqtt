@@ -18,7 +18,6 @@ package libmqtt
 
 import (
 	"bytes"
-	"math"
 	"testing"
 )
 
@@ -35,9 +34,9 @@ const (
 	testKeepalive      = uint16(1)
 	testProtoVersion   = V311
 	testPubDup         = false
-	testPacketID       = math.MaxUint16 / 2
-	testConnackPresent = true
-	testConnackCode    = byte(CodeSuccess)
+	testPacketID       = 0
+	testConnAckPresent = true
+	testConnAckCode    = byte(CodeSuccess)
 )
 
 var (
@@ -50,7 +49,7 @@ var (
 
 func testPacketBytes(pkt Packet, target []byte, t *testing.T) {
 	data := pkt.Bytes()
-	if bytes.Compare(data, target) != 0 {
+	if !bytes.Equal(data, target) {
 		t.Errorf("packet mismatch\nGenerated:%v\nTarget:%v", data, target)
 	}
 }

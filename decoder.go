@@ -45,13 +45,14 @@ func Decode(version ProtoVersion, r BufferedReader) (Packet, error) {
 	if bytesToRead == 0 {
 		switch header >> 4 {
 		case CtrlPingReq:
-			return &PingReqPacket{}, nil
+			return &PingReqPacket{BasePacket{ProtoVersion: version}}, nil
 		case CtrlPingResp:
-			return &PingRespPacket{}, nil
+			return &PingRespPacket{BasePacket{ProtoVersion: version}}, nil
 		case CtrlDisConn:
 			if version == V311 {
 				return &DisConnPacket{}, nil
 			} else {
+				// mqtt v5 has props
 				return nil, ErrDecodeBadPacket
 			}
 		default:
@@ -126,7 +127,6 @@ func decodeV311Packet(header byte, body []byte) (Packet, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		return pkt, nil
 	case CtrlConnAck:
 		return &ConnAckPacket{Present: body[0]&0x01 == 0x01, Code: body[1]}, nil
@@ -268,6 +268,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlConnAck:
 		pkt := &ConnAckPacket{
@@ -281,7 +282,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlPublish:
 		var topicName string
@@ -315,6 +316,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		pub.Props.setProps(props)
 
 		pub.Payload = body
+		pub.ProtoVersion = V5
 		return pub, nil
 	case CtrlPubAck:
 		if len(body) < 3 {
@@ -332,7 +334,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlPubRecv:
 		if len(body) < 3 {
@@ -350,7 +352,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlPubRel:
 		if len(body) < 3 {
@@ -367,7 +369,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlPubComp:
 		if len(body) < 3 {
@@ -385,7 +387,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlSubscribe:
 		pkt := &SubscribePacket{
@@ -412,6 +414,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			pkt.Topics = append(pkt.Topics, &Topic{Name: name, Qos: next[0]})
 			next = next[1:]
 		}
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlSubAck:
 		pkt := &SubAckPacket{
@@ -428,6 +431,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		for i := 0; i < len(next); i++ {
 			pkt.Codes = append(pkt.Codes, next[i])
 		}
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlUnSub:
 		pkt := &UnSubPacket{
@@ -449,6 +453,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			}
 			pkt.TopicNames = append(pkt.TopicNames, name)
 		}
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlUnSubAck:
 		pkt := &UnSubAckPacket{
@@ -461,7 +466,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlDisConn:
 		pkt := &DisConnPacket{
@@ -474,7 +479,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlAuth:
 		pkt := &AuthPacket{
@@ -487,7 +492,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 			return nil, err
 		}
 		pkt.Props.setProps(props)
-
+		pkt.ProtoVersion = V5
 		return pkt, nil
 	default:
 		return nil, ErrDecodeBadPacket
