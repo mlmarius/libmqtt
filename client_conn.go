@@ -234,32 +234,31 @@ func (c *clientConn) keepalive() {
 	}
 }
 
+const (
+	flushDelayInterval = 100 * time.Microsecond
+)
+
 // handle mqtt logic control packet send
 func (c *clientConn) handleSend() {
 	c.parent.log.v("NET clientConn.handleSend() for server = ", c.name)
 
-	flushSig := time.NewTimer(time.Millisecond)
-	forceFlushSig := time.NewTicker(time.Second)
+	flushSig := time.NewTimer(time.Hour)
 	defer func() {
 		flushSig.Stop()
+
 		c.parent.workers.Done()
 		c.parent.log.e("NET exit send handler for server =", c.name)
 	}()
 
 	for {
 		select {
-		case <-forceFlushSig.C:
-			if err := c.connRW.Flush(); err != nil {
-				c.parent.log.e("NET flush error", err)
-				return
-			}
+		case <-c.ctx.Done():
+			return
 		case <-flushSig.C:
 			if err := c.connRW.Flush(); err != nil {
 				c.parent.log.e("NET flush error", err)
 				return
 			}
-		case <-c.ctx.Done():
-			return
 		case pkt, more := <-c.parent.sendCh:
 			if !more {
 				return
@@ -270,7 +269,7 @@ func (c *clientConn) handleSend() {
 				c.parent.log.e("NET encode error", err)
 				return
 			}
-			flushSig.Reset(time.Millisecond)
+			flushSig.Reset(flushDelayInterval)
 
 			switch pkt.(type) {
 			case *PublishPacket:
@@ -294,7 +293,7 @@ func (c *clientConn) handleSend() {
 				c.parent.log.e("NET encode error", err)
 				return
 			}
-			flushSig.Reset(time.Millisecond)
+			flushSig.Reset(flushDelayInterval)
 
 			switch pkt.(type) {
 			case *PubRelPacket:
