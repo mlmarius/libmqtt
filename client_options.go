@@ -90,6 +90,51 @@ func WithConnHandleFunc(handler ConnHandler) Option {
 	}
 }
 
+func WithPubHandleFunc(handler PubHandler) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.pubHandler == nil {
+			client.pubHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithSubHandleFunc(handler SubHandler) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.subHandler == nil {
+			client.subHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithUnSubHandleFunc(handler UnSubHandler) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.unSubHandler == nil {
+			client.unSubHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithNetHandleFunc(handler NetHandler) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.netHandler == nil {
+			client.netHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithPersistHandleFunc(handler PersistHandler) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.persistHandler == nil {
+			client.persistHandler = handler
+		}
+		return nil
+	}
+}
+
 // WithLog will create basic logger for the client
 func WithLog(l LogLevel) Option {
 	return func(c *AsyncClient, options *connectOptions) error {

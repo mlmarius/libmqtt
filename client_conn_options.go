@@ -112,15 +112,18 @@ func (c connectOptions) connect(
 			name:         server,
 			conn:         conn,
 			connRW:       bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-			keepaliveC:   make(chan int),
-			logicSendC:   make(chan Packet),
-			netRecvC:     make(chan Packet),
+			keepaliveC:   make(chan struct{}, 1),
+			logicSendC:   make(chan Packet, 10),
+			netRecvC:     make(chan Packet, 10),
 		}
+
+		parent.connectedServers.Store(server, connImpl)
+
 		connImpl.ctx, connImpl.exit = context.WithCancel(ctx)
 
 		workers.Add(2)
 		go connImpl.handleSend()
-		go connImpl.handleRecv()
+		go connImpl.handleNetRecv()
 
 		connPkt := c.connPacket.clone()
 		connPkt.ProtoVersion = version
@@ -146,8 +149,10 @@ func (c connectOptions) connect(
 					close(connImpl.logicSendC)
 
 					if version > V311 && c.protoCompromise && p.Code == CodeUnsupportedProtoVersion {
-						workers.Add(1)
-						go c.connect(parent, server, version-1, reconnectDelay)
+						if !connImpl.parentExiting() {
+							workers.Add(1)
+							go c.connect(parent, server, version-1, reconnectDelay)
+						}
 						return
 					}
 
@@ -173,7 +178,7 @@ func (c connectOptions) connect(
 		// start mqtt logic
 		connImpl.logic()
 
-		if parent.isClosing() {
+		if parent.isClosing() || connImpl.parentExiting() {
 			return
 		}
 	}

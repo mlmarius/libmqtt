@@ -58,7 +58,7 @@ func (c *ConnPacket) Bytes() []byte {
 	}
 
 	w := &bytes.Buffer{}
-	c.WriteTo(w)
+	_ = c.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -69,20 +69,20 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 
 	switch c.Version() {
 	case V311:
-		w.WriteByte(byte(CtrlConn << 4))
+		_ = w.WriteByte(byte(CtrlConn << 4))
 		payload := c.payload()
 		if err := writeVarInt(len(payload)+10, w); err != nil {
 			return err
 		}
-		w.Write(mqtt)
-		w.WriteByte(byte(V311))
-		w.WriteByte(c.flags())
-		w.WriteByte(byte(c.Keepalive >> 8))
-		w.WriteByte(byte(c.Keepalive))
+		_, _ = w.Write(mqtt)
+		_ = w.WriteByte(byte(V311))
+		_ = w.WriteByte(c.flags())
+		_ = w.WriteByte(byte(c.Keepalive >> 8))
+		_ = w.WriteByte(byte(c.Keepalive))
 		_, err := w.Write(payload)
 		return err
 	case V5:
-		w.WriteByte(byte(CtrlConn << 4))
+		_ = w.WriteByte(byte(CtrlConn << 4))
 
 		props := c.Props.props()
 		propLen := len(props)
@@ -91,14 +91,18 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 		if err := writeVarInt(len(payload)+propLen+10, w); err != nil {
 			return err
 		}
-		w.Write(mqtt)
-		w.WriteByte(byte(V5))
-		w.WriteByte(c.flags())
-		w.WriteByte(byte(c.Keepalive >> 8))
-		w.WriteByte(byte(c.Keepalive))
+		_, _ = w.Write(mqtt)
+		_ = w.WriteByte(byte(V5))
+		_ = w.WriteByte(c.flags())
+		_ = w.WriteByte(byte(c.Keepalive >> 8))
+		_ = w.WriteByte(byte(c.Keepalive))
 
-		writeVarInt(propLen, w)
-		w.Write(props)
+		if propLen > 0 {
+			if err := writeVarInt(propLen, w); err != nil {
+				return err
+			}
+			_, _ = w.Write(props)
+		}
 
 		_, err := w.Write(payload)
 		return err
@@ -387,7 +391,7 @@ func (c *ConnAckPacket) Bytes() []byte {
 	}
 
 	w := &bytes.Buffer{}
-	c.WriteTo(w)
+	_ = c.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -398,12 +402,12 @@ func (c *ConnAckPacket) WriteTo(w BufferedWriter) error {
 
 	switch c.Version() {
 	case V311:
-		w.WriteByte(byte(CtrlConnAck << 4))
-		w.WriteByte(2)
-		w.WriteByte(boolToByte(c.Present))
+		_ = w.WriteByte(byte(CtrlConnAck << 4))
+		_ = w.WriteByte(2)
+		_ = w.WriteByte(boolToByte(c.Present))
 		return w.WriteByte(c.Code)
 	case V5:
-		w.WriteByte(byte(CtrlConnAck << 4))
+		_ = w.WriteByte(byte(CtrlConnAck << 4))
 
 		props := c.Props.props()
 		propLen := len(props)
@@ -412,11 +416,15 @@ func (c *ConnAckPacket) WriteTo(w BufferedWriter) error {
 			return err
 		}
 
-		w.WriteByte(boolToByte(c.Present))
-		w.WriteByte(c.Code)
+		_ = w.WriteByte(boolToByte(c.Present))
+		err := w.WriteByte(c.Code)
 
-		writeVarInt(propLen, w)
-		_, err := w.Write(props)
+		if propLen > 0 {
+			if err := writeVarInt(propLen, w); err != nil {
+				return err
+			}
+			_, err = w.Write(props)
+		}
 		return err
 	default:
 		return ErrUnsupportedVersion

@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Client type for *AsyncClient
@@ -52,14 +53,15 @@ type AsyncClient struct {
 	secureServers []string
 	options       connectOptions // client connection options
 
-	msgCh   chan *message       // error channel
-	sendCh  chan Packet         // pub channel for sending publish packet to server
-	recvCh  chan *PublishPacket // recv channel for server pub receiving
-	idGen   *idGenerator        // Packet id generator
-	router  TopicRouter         // Topic router
-	persist PersistMethod       // Persist method
-	workers *sync.WaitGroup     // Workers (goroutines)
-	log     *logger             // client logger
+	msgCh            chan *message       // error channel
+	sendCh           chan Packet         // pub channel for sending publish packet to server
+	recvCh           chan *PublishPacket // recv channel for server pub receiving
+	idGen            *idGenerator        // Packet id generator
+	router           TopicRouter         // Topic router
+	persist          PersistMethod       // Persist method
+	workers          *sync.WaitGroup     // Workers (goroutines)
+	log              *logger             // client logger
+	connectedServers *sync.Map
 
 	// success/error handlers
 	pubHandler     PubHandler
@@ -80,16 +82,17 @@ func defaultClient() *AsyncClient {
 		servers:       make([]string, 0, 1),
 		secureServers: make([]string, 0, 1),
 
-		options: defaultConnectOptions(),
-		msgCh:   make(chan *message, 10),
-		sendCh:  make(chan Packet, 1),
-		recvCh:  make(chan *PublishPacket, 1),
-		ctx:     ctx,
-		exit:    exitFunc,
-		router:  NewTextRouter(),
-		idGen:   newIDGenerator(),
-		workers: &sync.WaitGroup{},
-		persist: NonePersist,
+		options:          defaultConnectOptions(),
+		msgCh:            make(chan *message, 10),
+		sendCh:           make(chan Packet, 1),
+		recvCh:           make(chan *PublishPacket, 1),
+		ctx:              ctx,
+		exit:             exitFunc,
+		router:           NewTextRouter(),
+		idGen:            newIDGenerator(),
+		connectedServers: &sync.Map{},
+		workers:          &sync.WaitGroup{},
+		persist:          NonePersist,
 	}
 }
 
@@ -200,17 +203,34 @@ func (c *AsyncClient) Destroy(force bool) {
 	if force {
 		c.exit()
 	} else {
-		c.sendCh <- &DisConnPacket{}
+		c.connectedServers.Range(func(key, value interface{}) bool {
+			c.DisConnect(key.(string), nil)
+			return true
+		})
 	}
 }
 
-func (c *AsyncClient) Disconnect(server string, packet *DisConnPacket) {
+func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) {
 	if packet == nil {
 		packet = &DisConnPacket{}
 	}
 
-	// TODO: more graceful per server disconnect
-	c.sendCh <- packet
+	if val, ok := c.connectedServers.Load(server); ok {
+		conn := val.(*clientConn)
+		atomic.StoreUint32(&conn.parentExit, 1)
+		conn.send(packet)
+	}
+	c.connectedServers.Delete(server)
+
+	i := 0
+	c.connectedServers.Range(func(key, value interface{}) bool {
+		i++
+		return true
+	})
+
+	if i <= 1 {
+		c.exit()
+	}
 }
 
 func (c *AsyncClient) isClosing() bool {

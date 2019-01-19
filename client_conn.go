@@ -20,22 +20,28 @@ import (
 	"bufio"
 	"context"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
 // clientConn is the wrapper of connection to server
 // tend to actual packet send and receive
 type clientConn struct {
-	protoVersion ProtoVersion       // mqtt protocol version
-	parent       Client             // client which created this connection
-	name         string             // server addr info
-	conn         net.Conn           // connection to server
-	connRW       *bufio.ReadWriter  // make buffered connection
-	logicSendC   chan Packet        // logic send channel
-	netRecvC     chan Packet        // received packet from server
-	keepaliveC   chan int           // keepalive packet
-	ctx          context.Context    // context for single connection
-	exit         context.CancelFunc // terminate this connection if necessary
+	protoVersion  ProtoVersion       // mqtt protocol version
+	parent        Client             // client which created this connection
+	name          string             // server addr info
+	conn          net.Conn           // connection to server
+	connRW        *bufio.ReadWriter  // make buffered connection
+	logicSendC    chan Packet        // logic send channel
+	netRecvC      chan Packet        // received packet from server
+	keepaliveC    chan struct{}      // keepalive packet
+	ctx           context.Context    // context for single connection
+	exit          context.CancelFunc // terminate this connection if necessary
+	parentExit uint32
+}
+
+func (c *clientConn) parentExiting() bool {
+	return atomic.LoadUint32(&c.parentExit) == 1
 }
 
 // start mqtt logic
@@ -280,7 +286,12 @@ func (c *clientConn) handleSend() {
 				}
 			case *DisConnPacket:
 				// client exit with disconnect
-				c.parent.exit()
+				if err := c.connRW.Flush(); err != nil {
+					c.parent.log.e("NET flush error", err)
+				}
+				_ = c.conn.Close()
+
+				c.exit()
 				return
 			}
 		case pkt, more := <-c.logicSendC:
@@ -307,7 +318,11 @@ func (c *clientConn) handleSend() {
 					c.parent.persist.Delete(sendKey(pkt.(*PubCompPacket).PacketID)))
 			case *DisConnPacket:
 				// disconnect to server
+				if err := c.connRW.Flush(); err != nil {
+					c.parent.log.e("NET flush error", err)
+				}
 				_ = c.conn.Close()
+				c.exit()
 				return
 			}
 		}
@@ -315,11 +330,11 @@ func (c *clientConn) handleSend() {
 }
 
 // handle all message receive
-func (c *clientConn) handleRecv() {
-	c.parent.log.v("NET enter clientConn.handleRecv() for server = ", c.name)
+func (c *clientConn) handleNetRecv() {
+	c.parent.log.v("NET enter clientConn.handleNetRecv() for server = ", c.name)
 
 	defer func() {
-		c.parent.log.v("NET exit clientConn.handleRecv() for server =", c.name)
+		c.parent.log.v("NET exit clientConn.handleNetRecv() for server =", c.name)
 		close(c.netRecvC)
 		close(c.keepaliveC)
 
@@ -350,7 +365,7 @@ func (c *clientConn) handleRecv() {
 			switch pkt.(type) {
 			case *PingRespPacket:
 				c.parent.log.d("NET received keepalive message")
-				c.keepaliveC <- 1
+				c.keepaliveC <- struct{}{}
 			default:
 				c.netRecvC <- pkt
 			}

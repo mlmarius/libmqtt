@@ -46,30 +46,35 @@ type NetHandler func(server string, err error)
 type PersistHandler func(err error)
 
 // HandlePub register handler for pub error
+// Deprecated: use WithPubHandleFunc instead (will be removed in v1.0)
 func (c *AsyncClient) HandlePub(h PubHandler) {
 	c.log.d("CLI registered pub handler")
 	c.pubHandler = h
 }
 
 // HandleSub register handler for extra sub info
+// Deprecated: use WithSubHandleFunc instead (will be removed in v1.0)
 func (c *AsyncClient) HandleSub(h SubHandler) {
 	c.log.d("CLI registered sub handler")
 	c.subHandler = h
 }
 
 // HandleUnSub register handler for unsubscribe error
+// Deprecated: use WithUnSubHandleFunc instead (will be removed in v1.0)
 func (c *AsyncClient) HandleUnSub(h UnSubHandler) {
 	c.log.d("CLI registered unsubscribe handler")
 	c.unSubHandler = h
 }
 
 // HandleNet register handler for net error
+// Deprecated: use WithNetHandleFunc instead (will be removed in v1.0)
 func (c *AsyncClient) HandleNet(h NetHandler) {
 	c.log.d("CLI registered net handler")
 	c.netHandler = h
 }
 
 // HandlePersist register handler for net error
+// Deprecated: use WithPersistHandleFunc instead (will be removed in v1.0)
 func (c *AsyncClient) HandlePersist(h PersistHandler) {
 	c.log.d("CLI registered persist handler")
 	c.persistHandler = h
