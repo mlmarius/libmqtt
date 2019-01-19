@@ -61,8 +61,6 @@ import "github.com/goiiot/libmqtt"
 // Create a client and enable auto reconnect when connection lost
 // We primarily use `RegexRouter` for client
 client, err := libmqtt.NewClient(
-    // server address(es)
-    libmqtt.WithServer("localhost:1883"),
     // enable keepalive (10s interval) with 20% tolerance
     libmqtt.WithKeepalive(10, 1.2),
     // enable auto reconnect and set backoff strategy
@@ -105,37 +103,40 @@ client.Handle("bar", func(topic string, qos libmqtt.QosLevel, msg []byte) {
 
 ```go
 // connect to server
-client.Connect(func(server string, code byte, err error) {
-    if err != nil {
-        // failed
-        panic(err)
-    }
+client.ConnectServer("test.mosquitto.org:8883", 
+	libmqtt.WithCustomTLS(nil),
+	libmqtt.WithConnHandleFunc(func(server string, code byte, err error) {
+		if err != nil {
+			// failed
+			panic(err)
+		}
+		
+		if code != libmqtt.CodeSuccess {
+			// server rejected or in error
+			panic(code)
+		}
 
-    if code != libmqtt.CodeSuccess {
-        // server rejected or in error
-        panic(code)
-    }
+		// success
+		// you are now connected to the `server`
+		// (the `server` is one of your provided `servers` when create the client)
+		// start your business logic here or send a signal to your logic to start
 
-    // success
-    // you are now connected to the `server`
-    // (the `server` is one of your provided `servers` when create the client)
-    // start your business logic here or send a signal to your logic to start
+		// subscribe some topic(s)
+		client.Subscribe([]*libmqtt.Topic{
+			{Name: "foo"},
+			{Name: "bar", Qos: libmqtt.Qos1},
+		}...)
 
-    // subscribe some topic(s)
-    client.Subscribe([]*libmqtt.Topic{
-        {Name: "foo"},
-        {Name: "bar", Qos: libmqtt.Qos1},
-    }...)
-
-    // publish some topic message(s)
-    client.Publish([]*libmqtt.PublishPacket{
-        {TopicName: "foo", Payload: []byte("bar"), Qos: libmqtt.Qos0},
-        {TopicName: "bar", Payload: []byte("foo"), Qos: libmqtt.Qos1},
-    }...)
-})
+		// publish some topic message(s)
+		client.Publish([]*libmqtt.PublishPacket{
+			{TopicName: "foo", Payload: []byte("bar"), Qos: libmqtt.Qos0},
+			{TopicName: "bar", Payload: []byte("foo"), Qos: libmqtt.Qos1},
+		}...)
+	}),
+)
 ```
 
-5.Unsubscribe topic(s)
+5.Unsubscribe from topic(s)
 
 ```go
 client.UnSubscribe("foo", "bar")
@@ -171,7 +172,7 @@ packet, err := libmqtt.Decode(libmqtt.V311, reader)
 // ...
 
 // encode one mqtt packet to buffered writer
-err := libmqtt.Encode(packet, bufferWriter)
+err := libmqtt.Encode(packet, bufferedWriter)
 // ...
 ```
 
