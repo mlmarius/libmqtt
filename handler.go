@@ -43,7 +43,7 @@ type UnSubHandler func(topics []string, err error)
 type NetHandler func(server string, err error)
 
 // PersistHandler handles err happened when persist process has trouble
-type PersistHandler func(err error)
+type PersistHandler func(packet Packet, err error)
 
 // HandlePub register handler for pub error
 // Deprecated: use WithPubHandleFunc instead (will be removed in v1.0)

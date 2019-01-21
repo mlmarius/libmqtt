@@ -66,7 +66,7 @@ func notifyNetMsg(ch chan<- *message, server string, err error) {
 	}
 }
 
-func notifyPersistMsg(ch chan<- *message, err error) {
+func notifyPersistMsg(ch chan<- *message, packet Packet, err error) {
 	if err == nil {
 		return
 	}
@@ -74,5 +74,44 @@ func notifyPersistMsg(ch chan<- *message, err error) {
 	ch <- &message{
 		what: persistMsg,
 		err:  err,
+		obj:  packet,
+	}
+}
+
+func (c *AsyncClient) handleMsg() {
+	defer c.workers.Done()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case m, more := <-c.msgCh:
+			if !more {
+				return
+			}
+
+			switch m.what {
+			case pubMsg:
+				if c.pubHandler != nil {
+					go c.pubHandler(m.msg, m.err)
+				}
+			case subMsg:
+				if c.subHandler != nil {
+					go c.subHandler(m.obj.([]*Topic), m.err)
+				}
+			case unSubMsg:
+				if c.unSubHandler != nil {
+					go c.unSubHandler(m.obj.([]string), m.err)
+				}
+			case netMsg:
+				if c.netHandler != nil {
+					go c.netHandler(m.msg, m.err)
+				}
+			case persistMsg:
+				if c.persistHandler != nil {
+					go c.persistHandler(m.obj.(Packet), m.err)
+				}
+			}
+		}
 	}
 }

@@ -19,10 +19,11 @@
 package libmqtt
 
 import (
-	"go.uber.org/goleak"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 func TestClient_Reconnect(t *testing.T) {

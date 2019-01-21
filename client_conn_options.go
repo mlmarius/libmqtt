@@ -1,3 +1,19 @@
+/*
+ * Copyright Go-IIoT (https://github.com/goiiot)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package libmqtt
 
 import (
@@ -27,21 +43,18 @@ func (c *AsyncClient) ConnectServer(server string, connOptions ...Option) error 
 	return nil
 }
 
-type ConnOption func(*connectOptions) error
-
 func defaultConnectOptions() connectOptions {
 	return connectOptions{
 		protoVersion:    V311,
 		protoCompromise: false,
 
-		maxDelay:         2 * time.Minute,
-		firstDelay:       5 * time.Second,
-		backOffFactor:    1.5,
-		dialTimeout:      20 * time.Second,
-		defaultTlsConfig: &tls.Config{},
-		keepalive:        2 * time.Minute,
-		keepaliveFactor:  1.5,
-		connPacket:       &ConnPacket{},
+		maxDelay:        2 * time.Minute,
+		firstDelay:      5 * time.Second,
+		backOffFactor:   1.5,
+		dialTimeout:     20 * time.Second,
+		keepalive:       2 * time.Minute,
+		keepaliveFactor: 1.5,
+		connPacket:      &ConnPacket{},
 
 		newConnection: func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (conn net.Conn, e error) {
 			return tcpConnect(ctx, address, timeout, 0, tlsConfig)
@@ -56,12 +69,11 @@ type connectOptions struct {
 	protoVersion    ProtoVersion
 	protoCompromise bool
 
-	tlsConfig        *tls.Config // tls config with client side cert
-	maxDelay         time.Duration
-	firstDelay       time.Duration
-	backOffFactor    float64
-	autoReconnect    bool
-	defaultTlsConfig *tls.Config
+	tlsConfig     *tls.Config // tls config with client side cert
+	maxDelay      time.Duration
+	firstDelay    time.Duration
+	backOffFactor float64
+	autoReconnect bool
 
 	connPacket      *ConnPacket
 	keepalive       time.Duration // used by ConnPacket (time in second)
@@ -76,14 +88,18 @@ func (c connectOptions) connect(
 	version ProtoVersion,
 	reconnectDelay time.Duration,
 ) {
-	parent.log.v("connectOptions.connect()")
 	var (
 		conn net.Conn
 		err  error
 	)
 
 	ctx, workers, log := parent.ctx, parent.workers, parent.log
-	defer workers.Done()
+
+	parent.log.v("connectOptions.connect()")
+	defer func() {
+		parent.connectedServers.Delete(server)
+		workers.Done()
+	}()
 
 	conn, err = c.newConnection(ctx, server, c.dialTimeout, c.tlsConfig)
 	if err != nil {
@@ -205,19 +221,18 @@ reconnect:
 
 func (c connectOptions) clone() connectOptions {
 	return connectOptions{
-		connHandler:      c.connHandler,
-		dialTimeout:      c.dialTimeout,
-		protoVersion:     c.protoVersion,
-		protoCompromise:  c.protoCompromise,
-		tlsConfig:        c.tlsConfig,
-		maxDelay:         c.maxDelay,
-		firstDelay:       c.firstDelay,
-		backOffFactor:    c.backOffFactor,
-		autoReconnect:    c.autoReconnect,
-		defaultTlsConfig: c.defaultTlsConfig,
-		connPacket:       c.connPacket,
-		keepalive:        c.keepalive,
-		keepaliveFactor:  c.keepaliveFactor,
-		newConnection:    c.newConnection,
+		connHandler:     c.connHandler,
+		dialTimeout:     c.dialTimeout,
+		protoVersion:    c.protoVersion,
+		protoCompromise: c.protoCompromise,
+		tlsConfig:       c.tlsConfig,
+		maxDelay:        c.maxDelay,
+		firstDelay:      c.firstDelay,
+		backOffFactor:   c.backOffFactor,
+		autoReconnect:   c.autoReconnect,
+		connPacket:      c.connPacket,
+		keepalive:       c.keepalive,
+		keepaliveFactor: c.keepaliveFactor,
+		newConnection:   c.newConnection,
 	}
 }

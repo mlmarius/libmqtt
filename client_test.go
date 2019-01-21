@@ -17,8 +17,9 @@
 package libmqtt
 
 import (
-	"go.uber.org/goleak"
 	"testing"
+
+	"go.uber.org/goleak"
 )
 
 // test with emqx server (http://emqtt.io/ or https://github.com/emqx/emqx)

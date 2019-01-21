@@ -45,14 +45,14 @@ func NewClient(options ...Option) (Client, error) {
 	return c, nil
 }
 
-// AsyncClient mqtt client implementation
+// AsyncClient is the async mqtt client implementation
 type AsyncClient struct {
 	// Deprecated: use ConnectServer instead (will be removed in v1.0)
 	servers []string
 	// Deprecated: use ConnectServer instead (will be removed in v1.0)
 	secureServers []string
-	options       connectOptions // client connection options
 
+	options          connectOptions      // client wide connection options
 	msgCh            chan *message       // error channel
 	sendCh           chan Packet         // pub channel for sending publish packet to server
 	recvCh           chan *PublishPacket // recv channel for server pub receiving
@@ -99,7 +99,7 @@ func defaultClient() *AsyncClient {
 // Handle register subscription message route
 func (c *AsyncClient) Handle(topic string, h TopicHandler) {
 	if h != nil {
-		c.log.d("HDL registered topic handler, topic =", topic)
+		c.log.v("CLI registered topic handler, topic =", topic)
 		c.router.Handle(topic, h)
 	}
 }
@@ -108,7 +108,7 @@ func (c *AsyncClient) Handle(topic string, h TopicHandler) {
 //
 // Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
 func (c *AsyncClient) Connect(h ConnHandler) {
-	c.log.d("CLI connect to server, handler =", h)
+	c.log.v("CLI connect to server, handler =", h)
 
 	for _, s := range c.servers {
 		options := c.options.clone()
@@ -150,7 +150,7 @@ func (c *AsyncClient) Publish(msg ...*PublishPacket) {
 			if p.PacketID == 0 {
 				p.PacketID = c.idGen.next(p)
 				if err := c.persist.Store(sendKey(p.PacketID), p); err != nil {
-					notifyPersistMsg(c.msgCh, err)
+					notifyPersistMsg(c.msgCh, p, err)
 				}
 			}
 		}
@@ -210,7 +210,9 @@ func (c *AsyncClient) Destroy(force bool) {
 	}
 }
 
-func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) {
+// DisConnect from one server
+// return true if DisConnPacket will be sent
+func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) bool {
 	if packet == nil {
 		packet = &DisConnPacket{}
 	}
@@ -219,18 +221,10 @@ func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) {
 		conn := val.(*clientConn)
 		atomic.StoreUint32(&conn.parentExit, 1)
 		conn.send(packet)
-	}
-	c.connectedServers.Delete(server)
-
-	i := 0
-	c.connectedServers.Range(func(key, value interface{}) bool {
-		i++
 		return true
-	})
-
-	if i <= 1 {
-		c.exit()
 	}
+
+	return false
 }
 
 func (c *AsyncClient) isClosing() bool {
@@ -255,44 +249,6 @@ func (c *AsyncClient) handleTopicMsg() {
 			}
 
 			c.router.Dispatch(pkt)
-		}
-	}
-}
-
-func (c *AsyncClient) handleMsg() {
-	defer c.workers.Done()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case m, more := <-c.msgCh:
-			if !more {
-				return
-			}
-
-			switch m.what {
-			case pubMsg:
-				if c.pubHandler != nil {
-					go c.pubHandler(m.msg, m.err)
-				}
-			case subMsg:
-				if c.subHandler != nil {
-					go c.subHandler(m.obj.([]*Topic), m.err)
-				}
-			case unSubMsg:
-				if c.unSubHandler != nil {
-					go c.unSubHandler(m.obj.([]string), m.err)
-				}
-			case netMsg:
-				if c.netHandler != nil {
-					go c.netHandler(m.msg, m.err)
-				}
-			case persistMsg:
-				if c.persistHandler != nil {
-					go c.persistHandler(m.err)
-				}
-			}
 		}
 	}
 }

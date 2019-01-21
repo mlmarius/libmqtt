@@ -62,7 +62,7 @@ func WithServer(servers ...string) Option {
 
 // WithBuf is the alias of WithBufSize
 //
-// Deprecated: use Client.WithBufSize instead (will be removed in v1.0)
+// Deprecated: use WithBufSize instead (will be removed in v1.0)
 var WithBuf = WithBufSize
 
 // WithBufSize designate the channel size of send and recv
