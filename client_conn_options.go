@@ -105,7 +105,11 @@ func (c connectOptions) connect(
 	if err != nil {
 		log.e("CLI connect server failed, err =", err, ", server =", server)
 		if c.connHandler != nil {
-			go c.connHandler(server, math.MaxUint8, err)
+			parent.workers.Add(1)
+			go func() {
+				defer parent.workers.Done()
+				c.connHandler(server, math.MaxUint8, err)
+			}()
 		}
 
 		if c.autoReconnect && !parent.isClosing() {
@@ -151,7 +155,11 @@ func (c connectOptions) connect(
 		case pkt, more := <-connImpl.netRecvC:
 			if !more {
 				if c.connHandler != nil {
-					go c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
+					parent.workers.Add(1)
+					go func() {
+						defer parent.workers.Done()
+						c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
+					}()
 				}
 				close(connImpl.logicSendC)
 				return
@@ -173,7 +181,11 @@ func (c connectOptions) connect(
 					}
 
 					if c.connHandler != nil {
-						go c.connHandler(server, p.Code, nil)
+						parent.workers.Add(1)
+						go func() {
+							defer parent.workers.Done()
+							c.connHandler(server, p.Code, nil)
+						}()
 					}
 					return
 				}
@@ -188,7 +200,11 @@ func (c connectOptions) connect(
 
 		log.i("CLI connected to server =", server)
 		if c.connHandler != nil {
-			go c.connHandler(server, CodeSuccess, nil)
+			parent.workers.Add(1)
+			go func() {
+				defer parent.workers.Done()
+				c.connHandler(server, CodeSuccess, nil)
+			}()
 		}
 
 		// start mqtt logic
