@@ -317,7 +317,7 @@ func (c *clientConn) handleSend() {
 				notifyPersistMsg(c.parent.msgCh, pkt,
 					c.parent.persist.Delete(sendKey(pkt.(*PubCompPacket).PacketID)))
 			case *DisConnPacket:
-				// disconnect to server
+				// disconnect to server, no more action
 				if err := c.connRW.Flush(); err != nil {
 					c.parent.log.e("NET flush error", err)
 				}

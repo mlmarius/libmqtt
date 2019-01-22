@@ -207,6 +207,8 @@ func (c *AsyncClient) Destroy(force bool) {
 			c.DisConnect(key.(string), nil)
 			return true
 		})
+
+		c.exit()
 	}
 }
 
@@ -221,6 +223,14 @@ func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) bool {
 		conn := val.(*clientConn)
 		atomic.StoreUint32(&conn.parentExit, 1)
 		conn.send(packet)
+
+		select {
+		case <-conn.ctx.Done():
+			// wait for conn to exit
+		case <-c.ctx.Done():
+			return false
+		}
+
 		return true
 	}
 
