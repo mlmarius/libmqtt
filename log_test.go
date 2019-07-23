@@ -84,7 +84,6 @@ func Test_DebugLogger(t *testing.T) {
 		l.w("warning")
 		l.e("error")
 	}
-
 }
 
 func Test_VerboseLogger(t *testing.T) {

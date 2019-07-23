@@ -79,8 +79,6 @@ func notifyPersistMsg(ch chan<- *message, packet Packet, err error) {
 }
 
 func (c *AsyncClient) handleMsg() {
-	defer c.workers.Done()
-
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -93,43 +91,23 @@ func (c *AsyncClient) handleMsg() {
 			switch m.what {
 			case pubMsg:
 				if c.pubHandler != nil {
-					c.workers.Add(1)
-					go func() {
-						defer c.workers.Done()
-						c.pubHandler(m.msg, m.err)
-					}()
+					c.addWorker(func() { c.pubHandler(m.msg, m.err) })
 				}
 			case subMsg:
 				if c.subHandler != nil {
-					c.workers.Add(1)
-					go func() {
-						defer c.workers.Done()
-						c.subHandler(m.obj.([]*Topic), m.err)
-					}()
+					c.addWorker(func() { c.subHandler(m.obj.([]*Topic), m.err) })
 				}
 			case unSubMsg:
 				if c.unSubHandler != nil {
-					c.workers.Add(1)
-					go func() {
-						defer c.workers.Done()
-						c.unSubHandler(m.obj.([]string), m.err)
-					}()
+					c.addWorker(func() { c.unSubHandler(m.obj.([]string), m.err) })
 				}
 			case netMsg:
 				if c.netHandler != nil {
-					c.workers.Add(1)
-					go func() {
-						defer c.workers.Done()
-						c.netHandler(m.msg, m.err)
-					}()
+					c.addWorker(func() { c.netHandler(m.msg, m.err) })
 				}
 			case persistMsg:
 				if c.persistHandler != nil {
-					c.workers.Add(1)
-					go func() {
-						defer c.workers.Done()
-						c.persistHandler(m.obj.(Packet), m.err)
-					}()
+					c.addWorker(func() { c.persistHandler(m.obj.(Packet), m.err) })
 				}
 			}
 		}

@@ -38,9 +38,7 @@ func NewClient(options ...Option) (Client, error) {
 		}
 	}
 
-	c.workers.Add(2)
-	go c.handleTopicMsg()
-	go c.handleMsg()
+	c.addWorker(c.handleTopicMsg, c.handleMsg)
 
 	return c, nil
 }
@@ -59,9 +57,9 @@ type AsyncClient struct {
 	idGen            *idGenerator        // Packet id generator
 	router           TopicRouter         // Topic router
 	persist          PersistMethod       // Persist method
-	workers          *sync.WaitGroup     // Workers (goroutines)
-	log              *logger             // client logger
 	connectedServers *sync.Map
+	workers          *sync.WaitGroup // Workers (goroutines)
+	log              *logger         // client logger
 
 	// success/error handlers
 	pubHandler     PubHandler
@@ -82,17 +80,18 @@ func defaultClient() *AsyncClient {
 		servers:       make([]string, 0, 1),
 		secureServers: make([]string, 0, 1),
 
-		options:          defaultConnectOptions(),
-		msgCh:            make(chan *message, 10),
-		sendCh:           make(chan Packet, 1),
-		recvCh:           make(chan *PublishPacket, 1),
-		ctx:              ctx,
-		exit:             exitFunc,
-		router:           NewTextRouter(),
-		idGen:            newIDGenerator(),
-		connectedServers: &sync.Map{},
-		workers:          &sync.WaitGroup{},
-		persist:          NonePersist,
+		options: defaultConnectOptions(),
+		msgCh:   make(chan *message, 10),
+		sendCh:  make(chan Packet, 1),
+		recvCh:  make(chan *PublishPacket, 1),
+		ctx:     ctx,
+		exit:    exitFunc,
+		router:  NewTextRouter(),
+		idGen:   newIDGenerator(),
+		persist: NonePersist,
+
+		connectedServers: new(sync.Map),
+		workers:          new(sync.WaitGroup),
 	}
 }
 
@@ -114,8 +113,7 @@ func (c *AsyncClient) Connect(h ConnHandler) {
 		options := c.options.clone()
 		options.connHandler = h
 
-		c.workers.Add(1)
-		go options.connect(c, s, c.options.protoVersion, c.options.firstDelay)
+		c.addWorker(func() { options.connect(c, s, c.options.protoVersion, c.options.firstDelay) })
 	}
 
 	for _, s := range c.secureServers {
@@ -125,8 +123,7 @@ func (c *AsyncClient) Connect(h ConnHandler) {
 			ServerName: strings.SplitN(s, ":", 1)[0],
 		}
 
-		c.workers.Add(1)
-		go secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay)
+		c.addWorker(func() { secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay) })
 	}
 }
 
@@ -237,6 +234,20 @@ func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) bool {
 	return false
 }
 
+func (c *AsyncClient) addWorker(workerFunc ...func()) {
+	if c.isClosing() {
+		return
+	}
+
+	for _, f := range workerFunc {
+		c.workers.Add(1)
+		go func(f func()) {
+			defer c.workers.Done()
+			f()
+		}(f)
+	}
+}
+
 func (c *AsyncClient) isClosing() bool {
 	select {
 	case <-c.ctx.Done():
@@ -247,8 +258,6 @@ func (c *AsyncClient) isClosing() bool {
 }
 
 func (c *AsyncClient) handleTopicMsg() {
-	defer c.workers.Done()
-
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -258,7 +267,7 @@ func (c *AsyncClient) handleTopicMsg() {
 				return
 			}
 
-			c.router.Dispatch(pkt)
+			c.addWorker(func() { c.router.Dispatch(pkt) })
 		}
 	}
 }

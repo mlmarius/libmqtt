@@ -53,8 +53,7 @@ func (c *clientConn) logic() {
 
 	// start keepalive if required
 	if c.parent.options.keepalive > 0 {
-		c.parent.workers.Add(1)
-		go c.keepalive()
+		c.parent.addWorker(func() { c.keepalive() })
 	}
 
 	for {
@@ -207,19 +206,14 @@ func (c *clientConn) keepalive() {
 		t.Stop()
 		timeoutTimer.Stop()
 		c.parent.log.d("NET stop keepalive for server =", c.name)
-		c.parent.workers.Done()
 	}()
-
-	pingReq := &PingReqPacket{
-		BasePacket{ProtoVersion: c.protoVersion},
-	}
 
 	for {
 		select {
 		case <-c.ctx.Done():
 			return
 		case <-t.C:
-			c.send(pingReq)
+			c.send(PingReqPacket)
 
 			select {
 			case <-c.ctx.Done():
@@ -250,10 +244,8 @@ func (c *clientConn) handleSend() {
 
 	flushSig := time.NewTimer(time.Hour)
 	defer func() {
-		flushSig.Stop()
-
-		c.parent.workers.Done()
 		c.parent.log.e("NET exit send handler for server =", c.name)
+		flushSig.Stop()
 	}()
 
 	for {
@@ -337,8 +329,6 @@ func (c *clientConn) handleNetRecv() {
 		c.parent.log.v("NET exit clientConn.handleNetRecv() for server =", c.name)
 		close(c.netRecvC)
 		close(c.keepaliveC)
-
-		c.parent.workers.Done()
 	}()
 
 	for {
@@ -362,11 +352,10 @@ func (c *clientConn) handleNetRecv() {
 				return
 			}
 
-			switch pkt.(type) {
-			case *PingRespPacket:
+			if pkt.Type() == CtrlPingResp {
 				c.parent.log.d("NET received keepalive message")
 				c.keepaliveC <- struct{}{}
-			default:
+			} else {
 				c.netRecvC <- pkt
 			}
 		}

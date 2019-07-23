@@ -40,6 +40,18 @@ const (
 )
 
 var (
+	_True  = true
+	_False = false
+	True   = &_True
+	False  = &_False
+)
+
+var (
+	testConstUserProps      = UserProps{"MQ": []string{"TT"}}
+	testConstUserPropsBytes = []byte{0, 2, 'M', 'Q', 0, 2, 'T', 'T'}
+)
+
+var (
 	testWillMessage = []byte("bar")
 	testSubAckCodes = []byte{SubOkMaxQos0, SubOkMaxQos1, SubFail}
 	testTopics      = []string{"/test", "/test/foo", "/test/bar"}
@@ -47,11 +59,45 @@ var (
 	testTopicMsgs   = []string{"test data qos0", "foo data qos1", "bar data qos2"}
 )
 
-func testPacketBytes(pkt Packet, target []byte, t *testing.T) {
-	data := pkt.Bytes()
-	if !bytes.Equal(data, target) {
-		t.Errorf("packet mismatch\nGenerated:%v\nTarget:%v", data, target)
-	}
+func testPacketBytes(version ProtoVersion, pkt Packet, target []byte, t *testing.T) {
+	task := func() string {
+		switch version {
+		case V311:
+			return "V311"
+		case V5:
+			return "V5"
+		default:
+			return ""
+		}
+	}()
+
+	t.Run(task, func(t *testing.T) {
+		t.Parallel()
+		pkt.SetVersion(version)
+		data := pkt.Bytes()
+		if !bytes.Equal(data, target) {
+			t.Errorf("packet mismatch\nGenerated:%v\nTarget:%v", data, target)
+			t.FailNow()
+		}
+	})
+}
+
+func newV5TestPacketBytes(typ CtrlType, flags byte, props []byte, payload []byte) []byte {
+	packetBuf := &bytes.Buffer{}
+	packetBuf.WriteByte((typ << 4) | flags)
+
+	propsLenBuf := &bytes.Buffer{}
+	// get props length
+	_ = writeVarInt(len(props), propsLenBuf)
+	// set props
+	varHeader := append(propsLenBuf.Bytes(), props...)
+	// set variable header
+	_ = writeVarInt(len(varHeader)+len(payload), packetBuf)
+
+	packetBuf.Write(varHeader)
+	packetBuf.Write(payload)
+
+	return packetBuf.Bytes()
 }
 
 func init() {

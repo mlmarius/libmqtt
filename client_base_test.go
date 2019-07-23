@@ -144,6 +144,7 @@ func websocketPlainClient(t *testing.T, exH *extraHandler) (c Client, connFunc f
 			WithWebSocketConnector(0, nil),
 		); err != nil {
 			t.Error(err)
+			t.FailNow()
 		}
 	}
 
@@ -158,6 +159,7 @@ func websocketTLSClient(t *testing.T, exH *extraHandler) (c Client, connFunc fun
 			WithWebSocketConnector(0, nil),
 		); err != nil {
 			t.Error(err)
+			t.FailNow()
 		}
 	}
 
@@ -169,6 +171,7 @@ func tcpPlainClient(t *testing.T, exH *extraHandler) (c Client, connFunc func())
 	connFunc = func() {
 		if err := c.ConnectServer("localhost:1883"); err != nil {
 			t.Error(err)
+			t.FailNow()
 		}
 	}
 
@@ -182,6 +185,7 @@ func tcpTLSClient(t *testing.T, exH *extraHandler) (c Client, connFunc func()) {
 			testTLSOption(),
 		); err != nil {
 			t.Error(err)
+			t.FailNow()
 		}
 	}
 	return

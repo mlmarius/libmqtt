@@ -37,8 +37,7 @@ func (c *AsyncClient) ConnectServer(server string, connOptions ...Option) error 
 		}
 	}
 
-	c.workers.Add(1)
-	go options.connect(c, server, options.protoVersion, options.firstDelay)
+	c.addWorker(func() { options.connect(c, server, options.protoVersion, options.firstDelay) })
 
 	return nil
 }
@@ -93,23 +92,14 @@ func (c connectOptions) connect(
 		err  error
 	)
 
-	ctx, workers, log := parent.ctx, parent.workers, parent.log
-
 	parent.log.v("connectOptions.connect()")
-	defer func() {
-		parent.connectedServers.Delete(server)
-		workers.Done()
-	}()
+	defer parent.connectedServers.Delete(server)
 
-	conn, err = c.newConnection(ctx, server, c.dialTimeout, c.tlsConfig)
+	conn, err = c.newConnection(parent.ctx, server, c.dialTimeout, c.tlsConfig)
 	if err != nil {
-		log.e("CLI connect server failed, err =", err, ", server =", server)
+		parent.log.e("CLI connect server failed, err =", err, ", server =", server)
 		if c.connHandler != nil {
-			parent.workers.Add(1)
-			go func() {
-				defer parent.workers.Done()
-				c.connHandler(server, math.MaxUint8, err)
-			}()
+			parent.addWorker(func() { c.connHandler(server, math.MaxUint8, err) })
 		}
 
 		if c.autoReconnect && !parent.isClosing() {
@@ -139,27 +129,21 @@ func (c connectOptions) connect(
 
 		parent.connectedServers.Store(server, connImpl)
 
-		connImpl.ctx, connImpl.exit = context.WithCancel(ctx)
+		connImpl.ctx, connImpl.exit = context.WithCancel(parent.ctx)
 
-		workers.Add(2)
-		go connImpl.handleSend()
-		go connImpl.handleNetRecv()
+		parent.addWorker(func() { connImpl.handleSend() }, func() { connImpl.handleNetRecv() })
 
 		connPkt := c.connPacket.clone()
 		connPkt.ProtoVersion = version
 		connImpl.send(connPkt)
 
 		select {
-		case <-ctx.Done():
+		case <-connImpl.ctx.Done():
 			return
 		case pkt, more := <-connImpl.netRecvC:
 			if !more {
 				if c.connHandler != nil {
-					parent.workers.Add(1)
-					go func() {
-						defer parent.workers.Done()
-						c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
-					}()
+					parent.addWorker(func() { c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
 				close(connImpl.logicSendC)
 				return
@@ -173,38 +157,27 @@ func (c connectOptions) connect(
 					close(connImpl.logicSendC)
 
 					if version > V311 && c.protoCompromise && p.Code == CodeUnsupportedProtoVersion {
-						if !connImpl.parentExiting() {
-							workers.Add(1)
-							go c.connect(parent, server, version-1, reconnectDelay)
-						}
+						parent.addWorker(func() { c.connect(parent, server, version-1, reconnectDelay) })
 						return
 					}
 
 					if c.connHandler != nil {
-						parent.workers.Add(1)
-						go func() {
-							defer parent.workers.Done()
-							c.connHandler(server, p.Code, nil)
-						}()
+						parent.addWorker(func() { c.connHandler(server, p.Code, nil) })
 					}
 					return
 				}
 			default:
 				close(connImpl.logicSendC)
 				if c.connHandler != nil {
-					go c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket)
+					parent.addWorker(func() { c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
 				return
 			}
 		}
 
-		log.i("CLI connected to server =", server)
+		parent.log.i("CLI connected to server =", server)
 		if c.connHandler != nil {
-			parent.workers.Add(1)
-			go func() {
-				defer parent.workers.Done()
-				c.connHandler(server, CodeSuccess, nil)
-			}()
+			parent.addWorker(func() { c.connHandler(server, CodeSuccess, nil) })
 		}
 
 		// start mqtt logic
@@ -222,15 +195,14 @@ reconnect:
 
 	select {
 	case <-reconnectTimer.C:
-		log.e("CLI reconnecting to server =", server, "delay =", reconnectDelay)
+		parent.log.e("CLI reconnecting to server =", server, "delay =", reconnectDelay)
 		reconnectDelay = time.Duration(float64(reconnectDelay) * c.backOffFactor)
 		if reconnectDelay > c.maxDelay {
 			reconnectDelay = c.maxDelay
 		}
 
-		workers.Add(1)
-		go c.connect(parent, server, version-1, reconnectDelay)
-	case <-ctx.Done():
+		parent.addWorker(func() { c.connect(parent, server, version-1, reconnectDelay) })
+	case <-parent.ctx.Done():
 		return
 	}
 }
