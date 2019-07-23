@@ -63,7 +63,7 @@ func newIDGenerator() *idGenerator {
 	return &idGenerator{
 		nextID:  0,
 		usedIDs: make(map[uint16]interface{}),
-		mu:      &sync.RWMutex{},
+		mu:      new(sync.RWMutex),
 	}
 }
 

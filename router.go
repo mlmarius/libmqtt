@@ -33,7 +33,7 @@ type TopicRouter interface {
 
 // NewStandardRouter will create a standard mqtt router
 func NewStandardRouter() *StandardRouter {
-	return &StandardRouter{m: &sync.Map{}}
+	return &StandardRouter{m: new(sync.Map)}
 }
 
 // StandardRouter implements standard MQTT routing behaviour
@@ -61,7 +61,7 @@ func (s *StandardRouter) Dispatch(p *PublishPacket) {
 
 // NewRegexRouter will create a regex router
 func NewRegexRouter() *RegexRouter {
-	return &RegexRouter{m: &sync.Map{}}
+	return &RegexRouter{m: new(sync.Map)}
 }
 
 // RegexRouter use regex to match topic messages
@@ -103,7 +103,7 @@ func (r *RegexRouter) Dispatch(p *PublishPacket) {
 
 // NewTextRouter will create a text based router
 func NewTextRouter() *TextRouter {
-	return &TextRouter{m: &sync.Map{}}
+	return &TextRouter{m: new(sync.Map)}
 }
 
 // TextRouter uses plain string comparison to dispatch topic message

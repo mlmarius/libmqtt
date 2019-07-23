@@ -107,7 +107,7 @@ func (n *nonePersist) Destroy() error                        { return nil }
 // if no strategy provided (nil), then the default strategy will be used
 func NewMemPersist(strategy *PersistStrategy) PersistMethod {
 	p := &memPersist{
-		data: &sync.Map{},
+		data: new(sync.Map),
 		n:    0,
 	}
 
@@ -199,7 +199,7 @@ func (m *memPersist) Destroy() error {
 		return nil
 	}
 
-	m.data = &sync.Map{}
+	m.data = new(sync.Map)
 	return nil
 }
 
@@ -213,8 +213,8 @@ const (
 func NewFilePersist(dirPath string, strategy *PersistStrategy) PersistMethod {
 	p := &filePersist{
 		dirPath:  dirPath,
-		inMemBuf: &sync.Map{},
-		bytesBuf: &bytes.Buffer{},
+		inMemBuf: new(sync.Map),
+		bytesBuf: new(bytes.Buffer),
 	}
 
 	if strategy != nil {

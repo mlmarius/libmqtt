@@ -32,13 +32,13 @@ var (
 
 func initTestData_Ping() {
 	// pingreq
-	reqBuf := &bytes.Buffer{}
+	reqBuf := new(bytes.Buffer)
 	req := std.NewControlPacket(std.Pingreq).(*std.PingreqPacket)
 	_ = req.Write(reqBuf)
 	testPingReqMsgBytes = reqBuf.Bytes()
 
 	// pingresp
-	respBuf := &bytes.Buffer{}
+	respBuf := new(bytes.Buffer)
 	resp := std.NewControlPacket(std.Pingresp).(*std.PingrespPacket)
 	_ = resp.Write(respBuf)
 	testPingRespMsgBytes = respBuf.Bytes()

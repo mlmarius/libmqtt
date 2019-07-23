@@ -81,10 +81,10 @@ func testPacketBytes(version ProtoVersion, pkt Packet, target []byte, t *testing
 }
 
 func newV5TestPacketBytes(typ CtrlType, flags byte, props []byte, payload []byte) []byte {
-	packetBuf := &bytes.Buffer{}
+	packetBuf := new(bytes.Buffer)
 	packetBuf.WriteByte((typ << 4) | flags)
 
-	propsLenBuf := &bytes.Buffer{}
+	propsLenBuf := new(bytes.Buffer)
 	// get props length
 	_ = writeVarInt(len(props), propsLenBuf)
 	// set props

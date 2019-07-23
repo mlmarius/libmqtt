@@ -41,7 +41,7 @@ func (a *AuthPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = a.WriteTo(w)
 	return w.Bytes()
 }

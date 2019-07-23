@@ -44,7 +44,7 @@ func (p *pingReqPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }
@@ -78,7 +78,7 @@ func (p *pingRespPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }

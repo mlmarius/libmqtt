@@ -24,7 +24,7 @@ import (
 )
 
 func TestEncodeRemainLength(t *testing.T) {
-	buf := &bytes.Buffer{}
+	buf := new(bytes.Buffer)
 
 	for i := 0; i <= 127; i++ {
 		_ = writeVarInt(i, buf)
@@ -79,7 +79,7 @@ func TestEncodeOneV5Packet(t *testing.T) {
 }
 
 func BenchmarkFuncDecode(b *testing.B) {
-	buf := &bytes.Buffer{}
+	buf := new(bytes.Buffer)
 	pkt := testPubMsgs[0]
 
 	b.ReportAllocs()

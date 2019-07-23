@@ -140,7 +140,7 @@ func initTestData_Conn() {
 	connWillPkt.WillTopic = testWillTopic
 	connWillPkt.WillMessage = testWillMessage
 	connWillPkt.Keepalive = testKeepalive
-	connWillBuf := &bytes.Buffer{}
+	connWillBuf := new(bytes.Buffer)
 	_ = connWillPkt.Write(connWillBuf)
 	testConnWillMsgBytesV311 = connWillBuf.Bytes()
 	testConnWillMsgBytesV5 = newV5TestPacketBytes(CtrlConn, 0, nil, nil)
@@ -155,7 +155,7 @@ func initTestData_Conn() {
 	connPkt.ClientIdentifier = testClientID
 	connPkt.CleanSession = testCleanSession
 	connPkt.Keepalive = testKeepalive
-	connBuf := &bytes.Buffer{}
+	connBuf := new(bytes.Buffer)
 	_ = connPkt.Write(connBuf)
 	testConnMsgBytesV311 = connBuf.Bytes()
 	testConnMsgBytesV5 = newV5TestPacketBytes(CtrlConn, 0, nil, nil)
@@ -163,13 +163,13 @@ func initTestData_Conn() {
 	connAckPkt := std.NewControlPacket(std.Connack).(*std.ConnackPacket)
 	connAckPkt.SessionPresent = testConnAckPresent
 	connAckPkt.ReturnCode = testConnAckCode
-	connAckBuf := &bytes.Buffer{}
+	connAckBuf := new(bytes.Buffer)
 	_ = connAckPkt.Write(connAckBuf)
 	testConnAckMsgBytesV311 = connAckBuf.Bytes()
 	testConnAckMsgBytesV5 = newV5TestPacketBytes(CtrlConnAck, 0, nil, nil)
 
 	disConnPkt := std.NewControlPacket(std.Disconnect).(*std.DisconnectPacket)
-	disConnBuf := &bytes.Buffer{}
+	disConnBuf := new(bytes.Buffer)
 	_ = disConnPkt.Write(disConnBuf)
 	testDisConnMsgBytesV311 = disConnBuf.Bytes()
 	testDisConnMsgBytesV5 = newV5TestPacketBytes(CtrlDisConn, 0,

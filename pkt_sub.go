@@ -43,7 +43,7 @@ func (s *SubscribePacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = s.WriteTo(w)
 	return w.Bytes()
 }
@@ -142,7 +142,7 @@ func (s *SubAckPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = s.WriteTo(w)
 	return w.Bytes()
 }
@@ -226,7 +226,7 @@ func (s *UnSubPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = s.WriteTo(w)
 	return w.Bytes()
 }
@@ -304,7 +304,7 @@ func (s *UnSubAckPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = s.WriteTo(w)
 	return w.Bytes()
 }

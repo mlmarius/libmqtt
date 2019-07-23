@@ -79,7 +79,7 @@ func initTestData_Sub() {
 		subPkt.Qoss = testTopicQos[:i+1]
 		subPkt.MessageID = msgID
 
-		subBuf := &bytes.Buffer{}
+		subBuf := new(bytes.Buffer)
 		_ = subPkt.Write(subBuf)
 		testSubMsgBytesV311[i] = subBuf.Bytes()
 		testSubMsgBytesV5[i] = newV5TestPacketBytes(CtrlSubscribe, 0, nil, nil)
@@ -95,7 +95,7 @@ func initTestData_Sub() {
 		subAckPkt := std.NewControlPacket(std.Suback).(*std.SubackPacket)
 		subAckPkt.MessageID = msgID
 		subAckPkt.ReturnCodes = testSubAckCodes[:i+1]
-		subAckBuf := &bytes.Buffer{}
+		subAckBuf := new(bytes.Buffer)
 		_ = subAckPkt.Write(subAckBuf)
 		testSubAckMsgBytesV311[i] = subAckBuf.Bytes()
 		testSubAckMsgBytesV5[i] = newV5TestPacketBytes(CtrlSubAck, 0, nil, nil)
@@ -110,13 +110,13 @@ func initTestData_Sub() {
 		unsubPkt := std.NewControlPacket(std.Unsubscribe).(*std.UnsubscribePacket)
 		unsubPkt.Topics = testTopics[:i+1]
 		unsubPkt.MessageID = msgID
-		unSubBuf := &bytes.Buffer{}
+		unSubBuf := new(bytes.Buffer)
 		_ = unsubPkt.Write(unSubBuf)
 		testUnSubMsgBytesV311[i] = unSubBuf.Bytes()
 		testUnSubMsgBytesV5[i] = newV5TestPacketBytes(CtrlUnSub, 0, nil, nil)
 	}
 
-	unSunAckBuf := &bytes.Buffer{}
+	unSunAckBuf := new(bytes.Buffer)
 	testUnSubAckMsg = &UnSubAckPacket{
 		PacketID: 1,
 		Props: &UnSubAckProps{

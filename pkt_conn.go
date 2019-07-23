@@ -100,7 +100,7 @@ func (c *ConnPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = c.WriteTo(w)
 	return w.Bytes()
 }
@@ -189,7 +189,7 @@ func (c *ConnPacket) payload() []byte {
 			if c.WillProps == nil {
 				result = append(result, 0)
 			} else {
-				buf := &bytes.Buffer{}
+				buf := new(bytes.Buffer)
 				willProps := c.WillProps.props()
 				_ = writeVarInt(len(willProps), buf)
 				result = append(result, buf.Bytes()...)
@@ -380,7 +380,7 @@ func (c *ConnAckPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = c.WriteTo(w)
 	return w.Bytes()
 }
@@ -590,7 +590,7 @@ func (d *DisConnPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = d.WriteTo(w)
 	return w.Bytes()
 }
