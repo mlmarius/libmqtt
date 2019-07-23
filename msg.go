@@ -81,7 +81,7 @@ func notifyPersistMsg(ch chan<- *message, packet Packet, err error) {
 func (c *AsyncClient) handleMsg() {
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-c.stopSig:
 			return
 		case m, more := <-c.msgCh:
 			if !more {

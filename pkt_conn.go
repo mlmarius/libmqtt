@@ -111,7 +111,7 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 	}
 
 	const first = CtrlConn << 4
-	varHeader := []byte{'M', 'Q', 'T', 'T', byte(V311), c.flags(), byte(c.Keepalive >> 8), byte(c.Keepalive)}
+	varHeader := []byte{0x0, 0x4, 'M', 'Q', 'T', 'T', byte(V311), c.flags(), byte(c.Keepalive >> 8), byte(c.Keepalive)}
 	switch c.Version() {
 	case V311:
 		return c.write(w, first, varHeader, c.payload())
@@ -185,15 +185,18 @@ func (c *ConnPacket) payload() []byte {
 
 	if c.IsWill {
 		// will properties
-		if c.WillProps != nil {
-			result = append(result, 0)
-		} else {
-			buf := &bytes.Buffer{}
-			willProps := c.WillProps.props()
-			_ = writeVarInt(len(willProps), buf)
-			result = append(result, buf.Bytes()...)
-			result = append(willProps)
+		if c.ProtoVersion == V5 {
+			if c.WillProps == nil {
+				result = append(result, 0)
+			} else {
+				buf := &bytes.Buffer{}
+				willProps := c.WillProps.props()
+				_ = writeVarInt(len(willProps), buf)
+				result = append(result, buf.Bytes()...)
+				result = append(willProps)
+			}
 		}
+
 		// will topic and message
 		result = append(result, encodeStringWithLen(c.WillTopic)...)
 		result = append(result, encodeBytesWithLen(c.WillMessage)...)
@@ -260,7 +263,7 @@ type ConnProps struct {
 	// The contents of this data are defined by the authentication method.
 	AuthData []byte
 
-	mutex sync.RWMutex
+	mu sync.RWMutex
 }
 
 func (c *ConnProps) props() []byte {
@@ -285,8 +288,8 @@ func (c *ConnProps) clone() *ConnProps {
 	if c == nil {
 		return nil
 	}
-	c.mutex.RUnlock()
-	defer c.mutex.RUnlock()
+	c.mu.RUnlock()
+	defer c.mu.RUnlock()
 
 	authDataCopy := make([]byte, 0, len(c.AuthData))
 	_ = copy(authDataCopy, c.AuthData)
@@ -389,7 +392,8 @@ func (c *ConnAckPacket) WriteTo(w BufferedWriter) error {
 
 	switch c.Version() {
 	case V311:
-		return c.write(w, CtrlConnAck<<4, []byte{2, boolToByte(c.Present), c.Code}, nil)
+		_, err := w.Write([]byte{CtrlConnAck << 4, 2, boolToByte(c.Present), c.Code})
+		return err
 	case V5:
 		return c.writeV5(w, CtrlConnAck<<4, []byte{boolToByte(c.Present), c.Code}, c.Props.props(), nil)
 	default:

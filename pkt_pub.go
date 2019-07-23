@@ -41,7 +41,7 @@ func (p *PublishPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }
@@ -191,7 +191,7 @@ func (p *PubAckPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }
@@ -265,7 +265,7 @@ func (p *PubRecvPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }
@@ -340,7 +340,7 @@ func (p *PubRelPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }
@@ -415,7 +415,7 @@ func (p *PubCompPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
+	w := new(bytes.Buffer)
 	_ = p.WriteTo(w)
 	return w.Bytes()
 }

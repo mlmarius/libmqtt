@@ -79,7 +79,7 @@ func (s *SubscribePacket) payload() []byte {
 // SubscribeProps properties for SubscribePacket
 type SubscribeProps struct {
 	// SubID identifier of the subscription
-	SubID uint32
+	SubID int
 	// UserProps User defined Properties
 	UserProps UserProps
 }
@@ -92,7 +92,7 @@ func (s *SubscribeProps) props() []byte {
 	result := make([]byte, 0)
 
 	if s.SubID != 0 {
-		subIDBytes, _ := varIntBytes(int(s.SubID))
+		subIDBytes, _ := varIntBytes(s.SubID)
 		result = append(result, propKeySubID)
 		result = append(result, subIDBytes...)
 	}
@@ -111,7 +111,7 @@ func (s *SubscribeProps) setProps(props map[byte][]byte) {
 
 	if v, ok := props[propKeySubID]; ok {
 		id, _ := getRemainLength(bytes.NewReader(v))
-		s.SubID = uint32(id)
+		s.SubID = id
 	}
 
 	if v, ok := props[propKeyUserProps]; ok {

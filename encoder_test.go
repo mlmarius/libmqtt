@@ -19,35 +19,40 @@ package libmqtt
 import (
 	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEncodeRemainLength(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	for i := 0; i <= 127; i++ {
-		writeVarInt(i, buf)
-		result := buf.Bytes()
-		if len(result) != 1 {
-			t.Error("fail at level 1 target:", i, ", result:", result)
-		}
+		_ = writeVarInt(i, buf)
+
+		l, n := getRemainLength(buf)
+		assert.Equal(t, 1, n)
+		assert.Equal(t, i, l)
+
 		buf.Reset()
 	}
 
 	for i := 128; i <= 16383; i++ {
-		writeVarInt(i, buf)
-		result := buf.Bytes()
-		if len(result) != 2 {
-			t.Error("fail at level 2 target:", i, ", result:", result)
-		}
+		_ = writeVarInt(i, buf)
+
+		l, n := getRemainLength(buf)
+		assert.Equal(t, 2, n)
+		assert.Equal(t, i, l)
+
 		buf.Reset()
 	}
 
 	for i := 16384; i <= 2097151; i++ {
-		writeVarInt(i, buf)
-		result := buf.Bytes()
-		if len(result) != 3 {
-			t.Error("fail at level 3 target:", i, ", result:", result)
-		}
+		_ = writeVarInt(i, buf)
+
+		l, n := getRemainLength(buf)
+		assert.Equal(t, 3, n)
+		assert.Equal(t, i, l)
+
 		buf.Reset()
 	}
 

@@ -68,8 +68,9 @@ type AsyncClient struct {
 	netHandler     NetHandler
 	persistHandler PersistHandler
 
-	ctx  context.Context    // closure of this channel will signal all client worker to stop
-	exit context.CancelFunc // called when client exit
+	ctx     context.Context    // closure of this channel will signal all client worker to stop
+	exit    context.CancelFunc // called when client exit
+	stopSig <-chan struct{}
 }
 
 // create a client with default options
@@ -84,14 +85,16 @@ func defaultClient() *AsyncClient {
 		msgCh:   make(chan *message, 10),
 		sendCh:  make(chan Packet, 1),
 		recvCh:  make(chan *PublishPacket, 1),
-		ctx:     ctx,
-		exit:    exitFunc,
 		router:  NewTextRouter(),
 		idGen:   newIDGenerator(),
 		persist: NonePersist,
 
 		connectedServers: new(sync.Map),
 		workers:          new(sync.WaitGroup),
+
+		ctx:     ctx,
+		exit:    exitFunc,
+		stopSig: ctx.Done(),
 	}
 }
 
@@ -151,7 +154,12 @@ func (c *AsyncClient) Publish(msg ...*PublishPacket) {
 				}
 			}
 		}
-		c.sendCh <- p
+
+		select {
+		case <-c.stopSig:
+			return
+		case c.sendCh <- p:
+		}
 	}
 }
 
@@ -166,7 +174,12 @@ func (c *AsyncClient) Subscribe(topics ...*Topic) {
 	s := &SubscribePacket{Topics: topics}
 	s.PacketID = c.idGen.next(s)
 
-	c.sendCh <- s
+	select {
+	case <-c.stopSig:
+		return
+	case c.sendCh <- s:
+		return
+	}
 }
 
 // UnSubscribe topic(s)
@@ -180,7 +193,11 @@ func (c *AsyncClient) UnSubscribe(topics ...string) {
 	u := &UnSubPacket{TopicNames: topics}
 	u.PacketID = c.idGen.next(u)
 
-	c.sendCh <- u
+	select {
+	case <-c.stopSig:
+		return
+	case c.sendCh <- u:
+	}
 }
 
 // Wait will wait for all connections to exit
@@ -222,9 +239,9 @@ func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) bool {
 		conn.send(packet)
 
 		select {
-		case <-conn.ctx.Done():
+		case <-conn.stopSig:
 			// wait for conn to exit
-		case <-c.ctx.Done():
+		case <-c.stopSig:
 			return false
 		}
 
@@ -250,7 +267,7 @@ func (c *AsyncClient) addWorker(workerFunc ...func()) {
 
 func (c *AsyncClient) isClosing() bool {
 	select {
-	case <-c.ctx.Done():
+	case <-c.stopSig:
 		return true
 	default:
 		return false
@@ -260,7 +277,7 @@ func (c *AsyncClient) isClosing() bool {
 func (c *AsyncClient) handleTopicMsg() {
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-c.stopSig:
 			return
 		case pkt, more := <-c.recvCh:
 			if !more {

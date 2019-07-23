@@ -17,6 +17,7 @@
 package libmqtt
 
 import (
+	"fmt"
 	"io"
 	"sync"
 )
@@ -34,7 +35,7 @@ type propertySet map[byte][][]byte
 
 func (p propertySet) add(propKey byte, propValue interface{}) {
 	var val []byte
-	switch propValue.(type) {
+	switch v := propValue.(type) {
 	case string:
 		if propValue.(string) != "" {
 			val = encodeStringWithLen(propValue.(string))
@@ -43,32 +44,40 @@ func (p propertySet) add(propKey byte, propValue interface{}) {
 		if len(propValue.([]byte)) > 0 {
 			val = encodeBytesWithLen(propValue.([]byte))
 		}
+	case *bool:
+		if *v {
+			val = []byte{1}
+		} else {
+			val = []byte{0}
+		}
 	case bool:
-		if propValue.(bool) {
+		if v {
 			val = []byte{1}
 		} else {
 			val = []byte{0}
 		}
 	case uint8:
-		if propValue.(uint8) != 0 {
-			val = []byte{propValue.(uint8)}
+		if v != 0 {
+			val = []byte{v}
 		}
 	case uint16:
-		if propValue.(uint16) != 0 {
+		if v != 0 {
 			val = make([]byte, 2)
-			putUint16(val, propValue.(uint16))
+			putUint16(val, v)
 		}
+	case int:
+		val, _ = varIntBytes(v)
 	case uint32:
-		if propValue.(uint32) != 0 {
+		if v != 0 {
 			val = make([]byte, 4)
-			putUint32(val, propValue.(uint32))
+			putUint32(val, v)
 		}
 	case UserProps:
-		propValue.(UserProps).encodeTo(val)
+		v.encodeTo(val)
 	case nil:
 		return
 	default:
-		panic("unexpected property value type")
+		panic(fmt.Sprintf("unexpected property value type %T", v))
 	}
 
 	if v, ok := p[propKey]; ok {

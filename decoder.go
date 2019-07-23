@@ -23,15 +23,15 @@ import (
 
 var (
 	// ErrDecodeBadPacket is the error happened when trying to decode a none MQTT packet
-	ErrDecodeBadPacket = errors.New("try decoding none MQTT packet ")
+	ErrDecodeBadPacket = errors.New("none MQTT packet")
 
 	// ErrDecodeNoneV311Packet is the error happened when
 	// trying to decode mqtt 3.1.1 packet but got other mqtt packet ProtoVersion
-	ErrDecodeNoneV311Packet = errors.New("try decoding none MQTT v3.1.1 packet ")
+	ErrDecodeNoneV311Packet = errors.New("none MQTT v3.1.1 packet")
 
 	// ErrDecodeNoneV5Packet is the error happened when
 	// trying to decode mqtt 5 packet but got other mqtt packet ProtoVersion
-	ErrDecodeNoneV5Packet = errors.New("try decoding none MQTT v5 packet ")
+	ErrDecodeNoneV5Packet = errors.New("none MQTT v5 packet")
 )
 
 // Decode will decode one mqtt packet

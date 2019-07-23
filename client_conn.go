@@ -27,17 +27,19 @@ import (
 // clientConn is the wrapper of connection to server
 // tend to actual packet send and receive
 type clientConn struct {
-	protoVersion ProtoVersion       // mqtt protocol version
-	parent       Client             // client which created this connection
-	name         string             // server addr info
-	conn         net.Conn           // connection to server
-	connRW       *bufio.ReadWriter  // make buffered connection
-	logicSendC   chan Packet        // logic send channel
-	netRecvC     chan Packet        // received packet from server
-	keepaliveC   chan struct{}      // keepalive packet
-	ctx          context.Context    // context for single connection
-	exit         context.CancelFunc // terminate this connection if necessary
+	protoVersion ProtoVersion      // mqtt protocol version
+	parent       Client            // client which created this connection
+	name         string            // server addr info
+	conn         net.Conn          // connection to server
+	connRW       *bufio.ReadWriter // make buffered connection
+	logicSendC   chan Packet       // logic send channel
+	netRecvC     chan Packet       // received packet from server
+	keepaliveC   chan struct{}     // keepalive packet
 	parentExit   uint32
+
+	ctx     context.Context    // context for single connection
+	exit    context.CancelFunc // terminate this connection if necessary
+	stopSig <-chan struct{}
 }
 
 func (c *clientConn) parentExiting() bool {
@@ -53,13 +55,11 @@ func (c *clientConn) logic() {
 
 	// start keepalive if required
 	if c.parent.options.keepalive > 0 {
-		c.parent.addWorker(func() { c.keepalive() })
+		c.parent.addWorker(c.keepalive)
 	}
 
 	for {
 		select {
-		case <-c.ctx.Done():
-			return
 		case pkt, more := <-c.netRecvC:
 			if !more {
 				return
@@ -95,7 +95,7 @@ func (c *clientConn) logic() {
 					switch originPkt.(type) {
 					case *UnSubPacket:
 						originUnSub := originPkt.(*UnSubPacket)
-						c.parent.log.d("NET unSubscribed topics", originUnSub.TopicNames)
+						c.parent.log.d("NET unsubscribed topics", originUnSub.TopicNames)
 						notifyUnSubMsg(c.parent.msgCh, originUnSub.TopicNames, nil)
 						c.parent.idGen.free(p.PacketID)
 
@@ -190,6 +190,8 @@ func (c *clientConn) logic() {
 			default:
 				c.parent.log.v("NET received packet, type =", pkt.Type())
 			}
+		case <-c.stopSig:
+			return
 		}
 	}
 }
@@ -210,14 +212,10 @@ func (c *clientConn) keepalive() {
 
 	for {
 		select {
-		case <-c.ctx.Done():
-			return
 		case <-t.C:
 			c.send(PingReqPacket)
 
 			select {
-			case <-c.ctx.Done():
-				return
 			case _, more := <-c.keepaliveC:
 				if !more {
 					return
@@ -229,7 +227,11 @@ func (c *clientConn) keepalive() {
 				// exit client connection
 				c.exit()
 				return
+			case <-c.stopSig:
+				return
 			}
+		case <-c.stopSig:
+			return
 		}
 	}
 }
@@ -240,21 +242,22 @@ const (
 
 // handle mqtt logic control packet send
 func (c *clientConn) handleSend() {
-	c.parent.log.v("NET clientConn.handleSend() for server = ", c.name)
+	c.parent.log.v("NET clientConn.handleSend() for server =", c.name)
 
 	flushSig := time.NewTimer(time.Hour)
 	defer func() {
-		c.parent.log.e("NET exit send handler for server =", c.name)
+		c.parent.log.e("NET exit clientConn.handleSend() for server =", c.name)
 		flushSig.Stop()
 	}()
 
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-c.stopSig:
 			return
 		case <-flushSig.C:
 			if err := c.connRW.Flush(); err != nil {
 				c.parent.log.e("NET flush error", err)
+				flushSig.Reset(time.Hour)
 				return
 			}
 		case pkt, more := <-c.parent.sendCh:
@@ -323,7 +326,7 @@ func (c *clientConn) handleSend() {
 
 // handle all message receive
 func (c *clientConn) handleNetRecv() {
-	c.parent.log.v("NET enter clientConn.handleNetRecv() for server =", c.name)
+	c.parent.log.v("NET clientConn.handleNetRecv() for server =", c.name)
 
 	defer func() {
 		c.parent.log.v("NET exit clientConn.handleNetRecv() for server =", c.name)
@@ -332,31 +335,32 @@ func (c *clientConn) handleNetRecv() {
 	}()
 
 	for {
-		select {
-		case <-c.ctx.Done():
+		pkt, err := Decode(c.protoVersion, c.connRW)
+		if err != nil {
+			c.parent.log.e("NET connection broken, server =", c.name, "err =", err)
+
+			// TODO send proper net error to net handler
+			// exit client connection
+			c.exit()
 			return
-		default:
-			pkt, err := Decode(c.protoVersion, c.connRW)
-			if err != nil {
-				c.parent.log.e("NET connection broken, server =", c.name, "err =", err)
+		}
 
-				// TODO send proper net error to net handler
-				// exit client connection
-				c.exit()
-				return
+		if pkt.Version() != c.protoVersion {
+			// protocol version not match, exit
+			c.exit()
+			return
+		}
+
+		if pkt.Type() == CtrlPingResp {
+			c.parent.log.d("NET received keepalive message")
+			select {
+			case c.keepaliveC <- struct{}{}:
+			case <-c.stopSig:
 			}
-
-			if pkt.Version() != c.protoVersion {
-				// protocol version not match, exit
-				c.exit()
-				return
-			}
-
-			if pkt.Type() == CtrlPingResp {
-				c.parent.log.d("NET received keepalive message")
-				c.keepaliveC <- struct{}{}
-			} else {
-				c.netRecvC <- pkt
+		} else {
+			select {
+			case c.netRecvC <- pkt:
+			case <-c.stopSig:
 			}
 		}
 	}
@@ -364,9 +368,8 @@ func (c *clientConn) handleNetRecv() {
 
 // send mqtt logic packet
 func (c *clientConn) send(pkt Packet) {
-	if c.parent.isClosing() {
-		return
+	select {
+	case c.logicSendC <- pkt:
+	case <-c.stopSig:
 	}
-
-	c.logicSendC <- pkt
 }

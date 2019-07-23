@@ -19,6 +19,8 @@ package libmqtt
 import (
 	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // common test data
@@ -67,18 +69,14 @@ func testPacketBytes(version ProtoVersion, pkt Packet, target []byte, t *testing
 		case V5:
 			return "V5"
 		default:
-			return ""
+			return "Unknown"
 		}
 	}()
 
 	t.Run(task, func(t *testing.T) {
 		t.Parallel()
 		pkt.SetVersion(version)
-		data := pkt.Bytes()
-		if !bytes.Equal(data, target) {
-			t.Errorf("packet mismatch\nGenerated:%v\nTarget:%v", data, target)
-			t.FailNow()
-		}
+		assert.Equal(t, target, pkt.Bytes())
 	})
 }
 

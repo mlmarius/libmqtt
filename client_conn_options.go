@@ -28,7 +28,6 @@ import (
 // ConnectServer connect to server with connection specific options
 // only return errors happened when applying options
 func (c *AsyncClient) ConnectServer(server string, connOptions ...Option) error {
-	c.log.v("AsyncClient.ConnectServer()")
 	options := c.options.clone()
 
 	for _, setOption := range connOptions {
@@ -81,18 +80,13 @@ type connectOptions struct {
 	newConnection Connector
 }
 
-func (c connectOptions) connect(
-	parent *AsyncClient,
-	server string,
-	version ProtoVersion,
-	reconnectDelay time.Duration,
-) {
+func (c connectOptions) connect(parent *AsyncClient, server string, version ProtoVersion, reconnectDelay time.Duration) {
 	var (
 		conn net.Conn
 		err  error
 	)
 
-	parent.log.v("connectOptions.connect()")
+	parent.log.v("NET connectOptions.connect()")
 	defer parent.connectedServers.Delete(server)
 
 	conn, err = c.newConnection(parent.ctx, server, c.dialTimeout, c.tlsConfig)
@@ -130,16 +124,15 @@ func (c connectOptions) connect(
 		parent.connectedServers.Store(server, connImpl)
 
 		connImpl.ctx, connImpl.exit = context.WithCancel(parent.ctx)
+		connImpl.stopSig = connImpl.ctx.Done()
 
-		parent.addWorker(func() { connImpl.handleSend() }, func() { connImpl.handleNetRecv() })
+		parent.addWorker(connImpl.handleSend, connImpl.handleNetRecv)
 
 		connPkt := c.connPacket.clone()
 		connPkt.ProtoVersion = version
 		connImpl.send(connPkt)
 
 		select {
-		case <-connImpl.ctx.Done():
-			return
 		case pkt, more := <-connImpl.netRecvC:
 			if !more {
 				if c.connHandler != nil {
@@ -173,6 +166,8 @@ func (c connectOptions) connect(
 				}
 				return
 			}
+		case <-connImpl.stopSig:
+			return
 		}
 
 		parent.log.i("CLI connected to server =", server)
@@ -202,18 +197,22 @@ reconnect:
 		}
 
 		parent.addWorker(func() { c.connect(parent, server, version-1, reconnectDelay) })
-	case <-parent.ctx.Done():
+	case <-parent.stopSig:
 		return
 	}
 }
 
 func (c connectOptions) clone() connectOptions {
+	var tlsConfig *tls.Config
+	if c.tlsConfig != nil {
+		tlsConfig = c.tlsConfig.Clone()
+	}
 	return connectOptions{
 		connHandler:     c.connHandler,
 		dialTimeout:     c.dialTimeout,
 		protoVersion:    c.protoVersion,
 		protoCompromise: c.protoCompromise,
-		tlsConfig:       c.tlsConfig,
+		tlsConfig:       tlsConfig,
 		maxDelay:        c.maxDelay,
 		firstDelay:      c.firstDelay,
 		backOffFactor:   c.backOffFactor,

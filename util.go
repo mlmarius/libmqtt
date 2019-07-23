@@ -55,53 +55,71 @@ func sendKey(packetID uint16) string {
 
 type idGenerator struct {
 	nextID  uint32
-	usedIDs *sync.Map
-	m       *sync.RWMutex
+	usedIDs map[uint16]interface{}
+	mu      *sync.RWMutex
 }
 
 func newIDGenerator() *idGenerator {
 	return &idGenerator{
 		nextID:  0,
-		usedIDs: &sync.Map{},
-		m:       &sync.RWMutex{},
+		usedIDs: make(map[uint16]interface{}),
+		mu:      &sync.RWMutex{},
 	}
 }
 
-func (g *idGenerator) next(extra interface{}) uint16 {
-	var (
-		id     uint16
-		loaded bool
-	)
+func (g *idGenerator) used(id uint16) bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 
-	id = uint16(atomic.AddUint32(&g.nextID, 1))
+	_, loaded := g.usedIDs[id]
+	return loaded
+}
+
+func (g *idGenerator) setUsed(id uint16, data interface{}) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.usedIDs[id] = data
+}
+
+func (g *idGenerator) next(extra interface{}) uint16 {
+	id := uint16(atomic.AddUint32(&g.nextID, 1))
 	if id == 0 {
 		atomic.StoreUint32(&g.nextID, 1)
 		id = 1
 	}
 
-	_, loaded = g.usedIDs.LoadOrStore(id, extra)
-
-	if loaded {
-		for i := 0; loaded; id = uint16(atomic.AddUint32(&g.nextID, 1)) {
+	if used := g.used(id); used {
+		for i := 0; used; id = uint16(atomic.AddUint32(&g.nextID, 1)) {
 			if i == math.MaxUint16 {
 				// id running out, caller should try some time later
 				return 0
 			}
 
-			_, loaded = g.usedIDs.LoadOrStore(id, extra)
+			used = g.used(id)
 			i++
 		}
 	}
 
-	return uint16(id)
+	if id > 0 {
+		g.setUsed(id, extra)
+	}
+	return id
 }
 
 func (g *idGenerator) free(id uint16) {
-	g.usedIDs.Delete(id)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	delete(g.usedIDs, id)
 }
 
 func (g *idGenerator) getExtra(id uint16) (interface{}, bool) {
-	return g.usedIDs.Load(id)
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	data, ok := g.usedIDs[id]
+	return data, ok
 }
 
 func putUint16(d []byte, v uint16) {

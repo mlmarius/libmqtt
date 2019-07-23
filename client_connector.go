@@ -23,7 +23,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -34,7 +33,6 @@ type Connector func(ctx context.Context, address string, timeout time.Duration, 
 func WithTCPConnector(handshakeTimeout time.Duration) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
 		options.newConnection = func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (conn net.Conn, e error) {
-			c.log.v("tcpConnect()")
 			return tcpConnect(ctx, address, timeout, handshakeTimeout, tlsConfig)
 		}
 		return nil
@@ -44,7 +42,6 @@ func WithTCPConnector(handshakeTimeout time.Duration) Option {
 func WithWebSocketConnector(handshakeTimeout time.Duration, headers http.Header) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
 		options.newConnection = func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (conn net.Conn, e error) {
-			c.log.v("websocketConnect()")
 			return websocketConnect(ctx, address, timeout, handshakeTimeout, headers, tlsConfig)
 		}
 		return nil
@@ -124,7 +121,6 @@ func tcpConnect(ctx context.Context, address string, timeout, handshakeTimeout t
 type wsConn struct {
 	conn    *websocket.Conn
 	readBuf bytes.Buffer
-	mutex   sync.Mutex
 }
 
 func (c *wsConn) Read(b []byte) (int, error) {
@@ -162,7 +158,7 @@ func (c *wsConn) SetReadDeadline(t time.Time) error {
 }
 
 func (c *wsConn) SetWriteDeadline(t time.Time) error {
-	return c.conn.SetReadDeadline(t)
+	return c.conn.SetWriteDeadline(t)
 }
 
 func websocketConnect(ctx context.Context, address string, dialTimeout, handShakeTimeout time.Duration, headers http.Header, tlsConfig *tls.Config) (net.Conn, error) {

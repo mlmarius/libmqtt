@@ -1,8 +1,14 @@
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew/spew
 # github.com/eclipse/paho.mqtt.golang v1.2.0
 github.com/eclipse/paho.mqtt.golang/packets
 github.com/eclipse/paho.mqtt.golang
 # github.com/gorilla/websocket v1.4.0
 github.com/gorilla/websocket
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
+# github.com/stretchr/testify v1.3.0
+github.com/stretchr/testify/assert
 # go.uber.org/goleak v0.10.0
 go.uber.org/goleak
 go.uber.org/goleak/internal/stack

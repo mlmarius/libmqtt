@@ -19,6 +19,8 @@ package libmqtt
 import (
 	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -53,17 +55,18 @@ func initTestData_Auth() {
 }
 
 func TestAuthPacket_Bytes(t *testing.T) {
+	t.Skip("v5")
 	testPacketBytes(V5, testAuthMsg, testAuthMsgBytes, t)
 }
 
 func TestAuthProps_Props(t *testing.T) {
-	propsBytes := testAuthMsg.Props.props()
-	if !bytes.Equal(propsBytes, testAuthPropsBytes) {
-		t.Errorf("auth props bytes not math:\ntarget: %v\ngenerated: %v", testAuthPropsBytes, propsBytes)
-	}
+	t.Skip("v5")
+	assert.Equal(t, testAuthPropsBytes, testAuthMsg.Props.props())
 }
 
 func TestAuthProps_SetProps(t *testing.T) {
+	t.Skip("v5")
+
 	emptyProps := &AuthProps{}
 	emptyProps.setProps(testProps)
 
