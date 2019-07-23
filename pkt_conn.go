@@ -21,6 +21,48 @@ import (
 	"sync"
 )
 
+type WillProps struct {
+	// The Server delays publishing the Client’s Will Message until
+	// the Will Delay Interval has passed or the Session ends, whichever happens first.
+	//
+	// If a new Network Connection to this Session is made before the Will Delay Interval has passed,
+	// the Server MUST NOT send the Will Message
+	WillDelayInterval uint32
+
+	PayloadFormat uint8
+
+	// the lifetime of the Will Message in seconds and is sent as the Publication Expiry Interval
+	// when the Server publishes the Will Message.
+	MessageExpiryInterval uint32
+
+	// String describing the content of the Will Message
+	ContentType string
+
+	// String which is used as the Topic Name for a response message
+	ResponseTopic string
+
+	//  The Correlation Data is used by the sender of the Request Message to identify which request the Response Message is for when it is received.
+	CorrelationData []byte
+
+	UserProps UserProps
+}
+
+func (p *WillProps) props() []byte {
+	if p == nil {
+		return nil
+	}
+
+	propSet := propertySet{}
+	propSet.set(propKeyWillDelayInterval, p.WillDelayInterval)
+	propSet.set(propKeyPayloadFormatIndicator, p.PayloadFormat)
+	propSet.set(propKeyMessageExpiryInterval, p.MessageExpiryInterval)
+	propSet.set(propKeyContentType, p.ContentType)
+	propSet.set(propKeyRespTopic, p.ResponseTopic)
+	propSet.set(propKeyCorrelationData, p.CorrelationData)
+	propSet.set(propKeyUserProps, p.UserProps)
+	return propSet.bytes()
+}
+
 // ConnPacket is the first packet sent by Client to Server
 type ConnPacket struct {
 	BasePacket
@@ -32,6 +74,7 @@ type ConnPacket struct {
 	IsWill       bool
 	WillQos      QosLevel
 	WillRetain   bool
+	WillProps    *WillProps
 
 	// Properties
 	Props *ConnProps
@@ -67,45 +110,14 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
+	const first = CtrlConn << 4
+	varHeader := []byte{'M', 'Q', 'T', 'T', byte(V311), c.flags(), byte(c.Keepalive >> 8), byte(c.Keepalive)}
 	switch c.Version() {
 	case V311:
-		_ = w.WriteByte(byte(CtrlConn << 4))
-		payload := c.payload()
-		if err := writeVarInt(len(payload)+10, w); err != nil {
-			return err
-		}
-		_, _ = w.Write(mqtt)
-		_ = w.WriteByte(byte(V311))
-		_ = w.WriteByte(c.flags())
-		_ = w.WriteByte(byte(c.Keepalive >> 8))
-		_ = w.WriteByte(byte(c.Keepalive))
-		_, err := w.Write(payload)
-		return err
+		return c.write(w, first, varHeader, c.payload())
 	case V5:
-		_ = w.WriteByte(byte(CtrlConn << 4))
-
-		props := c.Props.props()
-		propLen := len(props)
-		payload := c.payload()
-
-		if err := writeVarInt(len(payload)+propLen+10, w); err != nil {
-			return err
-		}
-		_, _ = w.Write(mqtt)
-		_ = w.WriteByte(byte(V5))
-		_ = w.WriteByte(c.flags())
-		_ = w.WriteByte(byte(c.Keepalive >> 8))
-		_ = w.WriteByte(byte(c.Keepalive))
-
-		if propLen > 0 {
-			if err := writeVarInt(propLen, w); err != nil {
-				return err
-			}
-			_, _ = w.Write(props)
-		}
-
-		_, err := w.Write(payload)
-		return err
+		varHeader[4] = byte(V5)
+		return c.writeV5(w, first, varHeader, c.Props.props(), c.payload())
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -171,8 +183,18 @@ func (c *ConnPacket) payload() []byte {
 	// client id
 	result := encodeStringWithLen(c.ClientID)
 
-	// will topic and message
 	if c.IsWill {
+		// will properties
+		if c.WillProps != nil {
+			result = append(result, 0)
+		} else {
+			buf := &bytes.Buffer{}
+			willProps := c.WillProps.props()
+			_ = writeVarInt(len(willProps), buf)
+			result = append(result, buf.Bytes()...)
+			result = append(willProps)
+		}
+		// will topic and message
 		result = append(result, encodeStringWithLen(c.WillTopic)...)
 		result = append(result, encodeBytesWithLen(c.WillMessage)...)
 	}
@@ -219,11 +241,11 @@ type ConnProps struct {
 
 	// The Client uses this value to request the Server to return Response
 	// Information in the ConnAckPacket
-	ReqRespInfo bool
+	ReqRespInfo *bool
 
 	// The Client uses this value to indicate whether the Reason String
 	// or User Properties are sent in the case of failures.
-	ReqProblemInfo bool
+	ReqProblemInfo *bool
 
 	// User defined Properties
 	UserProps UserProps
@@ -246,54 +268,17 @@ func (c *ConnProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
-	if c.SessionExpiryInterval != 0 {
-		data := []byte{propKeySessionExpiryInterval, 0, 0, 0, 0}
-		putUint32(data[1:], c.SessionExpiryInterval)
-		result = append(result, data...)
-	}
-
-	if c.MaxRecv != 0 {
-		data := []byte{propKeyMaxRecv, 0, 0}
-		putUint16(data[1:], c.MaxRecv)
-		result = append(result, data...)
-	}
-
-	if c.MaxPacketSize != 0 {
-		data := []byte{propKeyMaxPacketSize, 0, 0, 0, 0}
-		putUint32(data[1:], c.MaxPacketSize)
-		result = append(result, data...)
-	}
-
-	if c.MaxTopicAlias != 0 {
-		data := []byte{propKeyMaxTopicAlias, 0, 0}
-		putUint16(data[1:], c.MaxTopicAlias)
-		result = append(result, data...)
-	}
-
-	if c.ReqRespInfo {
-		result = append(result, propKeyReqRespInfo, 1)
-	}
-
-	if c.ReqProblemInfo {
-		result = append(result, propKeyReqProblemInfo, 1)
-	}
-
-	if c.UserProps != nil {
-		c.UserProps.encodeTo(result)
-	}
-
-	if c.AuthMethod != "" {
-		result = append(result, propKeyAuthMethod)
-		result = append(result, encodeStringWithLen(c.AuthMethod)...)
-	}
-
-	if c.AuthData != nil {
-		result = append(result, propKeyAuthData)
-		result = append(result, encodeBytesWithLen(c.AuthData)...)
-	}
-
-	return result
+	p := propertySet{}
+	p.set(propKeySessionExpiryInterval, c.SessionExpiryInterval)
+	p.set(propKeyMaxRecv, c.MaxRecv)
+	p.set(propKeyMaxPacketSize, c.MaxPacketSize)
+	p.set(propKeyMaxTopicAlias, c.MaxTopicAlias)
+	p.set(propKeyReqRespInfo, c.ReqRespInfo)
+	p.set(propKeyReqProblemInfo, c.ReqProblemInfo)
+	p.set(propKeyUserProps, c.UserProps)
+	p.set(propKeyAuthMethod, c.AuthMethod)
+	p.set(propKeyAuthData, c.AuthData)
+	return p.bytes()
 }
 
 func (c *ConnProps) clone() *ConnProps {
@@ -349,11 +334,13 @@ func (c *ConnProps) setProps(props map[byte][]byte) {
 	}
 
 	if v, ok := props[propKeyReqRespInfo]; ok && len(v) == 1 {
-		c.ReqRespInfo = v[0] == 1
+		b := v[0] == 1
+		c.ReqRespInfo = &b
 	}
 
 	if v, ok := props[propKeyReqProblemInfo]; ok && len(v) == 1 {
-		c.ReqProblemInfo = v[0] == 1
+		b := v[0] == 1
+		c.ReqProblemInfo = &b
 	}
 
 	if v, ok := props[propKeyUserProps]; ok {
@@ -402,30 +389,9 @@ func (c *ConnAckPacket) WriteTo(w BufferedWriter) error {
 
 	switch c.Version() {
 	case V311:
-		_ = w.WriteByte(byte(CtrlConnAck << 4))
-		_ = w.WriteByte(2)
-		_ = w.WriteByte(boolToByte(c.Present))
-		return w.WriteByte(c.Code)
+		return c.write(w, CtrlConnAck<<4, []byte{2, boolToByte(c.Present), c.Code}, nil)
 	case V5:
-		_ = w.WriteByte(byte(CtrlConnAck << 4))
-
-		props := c.Props.props()
-		propLen := len(props)
-
-		if err := writeVarInt(propLen+2, w); err != nil {
-			return err
-		}
-
-		_ = w.WriteByte(boolToByte(c.Present))
-		err := w.WriteByte(c.Code)
-
-		if propLen > 0 {
-			if err := writeVarInt(propLen, w); err != nil {
-				return err
-			}
-			_, err = w.Write(props)
-		}
-		return err
+		return c.writeV5(w, CtrlConnAck<<4, []byte{boolToByte(c.Present), c.Code}, c.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -450,7 +416,7 @@ type ConnAckProps struct {
 	// Declares whether the Server supports retained messages.
 	// true means that retained messages are not supported.
 	// false means retained messages are supported
-	RetainAvail bool
+	RetainAvail *bool
 
 	// Maximum Packet Size the Server is willing to accept.
 	// If the Maximum Packet Size is not present, there is no limit on the
@@ -480,21 +446,21 @@ type ConnAckProps struct {
 	// true means Wildcard Subscriptions are supported.
 	//
 	// default is true
-	WildcardSubAvail bool // 40
+	WildcardSubAvail *bool // 40
 
 	// Whether the Server supports Subscription Identifiers.
 	// false means that Subscription Identifiers are not supported.
 	// true means Subscription Identifiers are supported.
 	//
 	// default is true
-	SubIDAvail bool
+	SubIDAvail *bool
 
 	// Whether the Server supports Shared Subscriptions.
 	// false means that Shared Subscriptions are not supported.
 	// true means Shared Subscriptions are supported
 	//
 	// default is true
-	SharedSubAvail bool
+	SharedSubAvail *bool
 
 	// Keep Alive time assigned by the Server
 	ServerKeepalive uint16
@@ -517,92 +483,25 @@ func (c *ConnAckProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
-	if c.SessionExpiryInterval != 0 {
-		data := []byte{propKeySessionExpiryInterval, 0, 0, 0, 0}
-		putUint32(data[1:], c.SessionExpiryInterval)
-		result = append(result, data...)
-	}
-
-	if c.MaxRecv != 0 {
-		data := []byte{propKeyMaxRecv, 0, 0}
-		putUint16(data[1:], c.MaxRecv)
-		result = append(result, data...)
-	}
-
-	if c.MaxQos != Qos2 {
-		result = append(result, propKeyMaxQos, c.MaxQos)
-	}
-
-	if c.RetainAvail {
-		result = append(result, propKeyRetainAvail, 1)
-	}
-
-	if c.MaxPacketSize != 0 {
-		data := []byte{propKeyMaxPacketSize, 0, 0, 0, 0}
-		putUint32(data[1:], c.MaxPacketSize)
-		result = append(result, data...)
-	}
-
-	if c.AssignedClientID != "" {
-		result = append(result, propKeyAssignedClientID)
-		result = append(result, encodeStringWithLen(c.AssignedClientID)...)
-	}
-
-	if c.MaxTopicAlias != 0 {
-		data := []byte{propKeyMaxTopicAlias, 0, 0}
-		putUint16(data[1:], c.MaxTopicAlias)
-		result = append(result, data...)
-	}
-
-	if c.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(c.Reason)...)
-	}
-
-	if c.UserProps != nil {
-		c.UserProps.encodeTo(result)
-	}
-
-	if c.WildcardSubAvail {
-		result = append(result, propKeyWildcardSubAvail, 1)
-	}
-
-	if c.SubIDAvail {
-		result = append(result, propKeySubIDAvail, 1)
-	}
-
-	if c.SharedSubAvail {
-		result = append(result, propKeySharedSubAvail, 1)
-	}
-
-	if c.ServerKeepalive != 0 {
-		data := []byte{propKeyServerKeepalive, 0, 0}
-		putUint16(data[1:], c.ServerKeepalive)
-		result = append(result, data...)
-	}
-
-	if c.RespInfo != "" {
-		result = append(result, propKeyRespInfo)
-		result = append(result, encodeStringWithLen(c.RespInfo)...)
-	}
-
-	if c.ServerRef != "" {
-		result = append(result, propKeyServerRef)
-		result = append(result, encodeStringWithLen(c.ServerRef)...)
-	}
-
-	if c.AuthMethod != "" {
-		result = append(result, propKeyAuthMethod)
-		result = append(result, encodeStringWithLen(c.AuthMethod)...)
-	}
-
-	if c.AuthData != nil {
-		result = append(result, propKeyAuthData)
-		result = append(result, encodeBytesWithLen(c.AuthData)...)
-	}
-
-	return result
+	p := propertySet{}
+	p.set(propKeyRetainAvail, c.RetainAvail)
+	p.set(propKeyWildcardSubAvail, c.WildcardSubAvail)
+	p.set(propKeySubIDAvail, c.SubIDAvail)
+	p.set(propKeySharedSubAvail, c.SharedSubAvail)
+	p.set(propKeySessionExpiryInterval, c.SessionExpiryInterval)
+	p.set(propKeyMaxRecv, c.MaxRecv)
+	p.set(propKeyMaxQos, c.MaxQos)
+	p.set(propKeyMaxPacketSize, c.MaxPacketSize)
+	p.set(propKeyAssignedClientID, c.AssignedClientID)
+	p.set(propKeyMaxTopicAlias, c.MaxTopicAlias)
+	p.set(propKeyReasonString, c.Reason)
+	p.set(propKeyUserProps, c.UserProps)
+	p.set(propKeyServerKeepalive, c.ServerKeepalive)
+	p.set(propKeyRespInfo, c.RespInfo)
+	p.set(propKeyServerRef, c.ServerRef)
+	p.set(propKeyAuthMethod, c.AuthMethod)
+	p.set(propKeyAuthData, c.AuthData)
+	return p.bytes()
 }
 
 func (c *ConnAckProps) setProps(props map[byte][]byte) {
@@ -619,7 +518,8 @@ func (c *ConnAckProps) setProps(props map[byte][]byte) {
 	}
 
 	if v, ok := props[propKeyRetainAvail]; ok && len(v) == 1 {
-		c.RetainAvail = v[0] == 1
+		b := v[0] == 1
+		c.RetainAvail = &b
 	}
 
 	if v, ok := props[propKeyMaxPacketSize]; ok {
@@ -643,7 +543,8 @@ func (c *ConnAckProps) setProps(props map[byte][]byte) {
 	}
 
 	if v, ok := props[propKeyWildcardSubAvail]; ok && len(v) == 1 {
-		c.WildcardSubAvail = v[0] == 1
+		b := v[0] == 1
+		c.WildcardSubAvail = &b
 	}
 
 	if v, ok := props[propKeyServerKeepalive]; ok {
@@ -686,7 +587,7 @@ func (d *DisConnPacket) Bytes() []byte {
 	}
 
 	w := &bytes.Buffer{}
-	d.WriteTo(w)
+	_ = d.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -695,25 +596,16 @@ func (d *DisConnPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
+	var (
+		err error
+	)
+
 	switch d.Version() {
 	case V311:
-		w.WriteByte(byte(CtrlDisConn << 4))
-		return w.WriteByte(0x00)
-	case V5:
-		w.WriteByte(byte(CtrlDisConn << 4))
-		props := d.Props.props()
-
-		tmpBuf := &bytes.Buffer{}
-		writeVarInt(len(props), tmpBuf)
-
-		if err := writeVarInt(len(props)+1+tmpBuf.Len(), w); err != nil {
-			return err
-		}
-
-		w.WriteByte(d.Code)
-		tmpBuf.WriteTo(w)
-		_, err := w.Write(props)
+		_, err = w.Write([]byte{CtrlDisConn << 4, 0})
 		return err
+	case V5:
+		return d.writeV5(w, CtrlDisConn<<4, nil, d.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -742,28 +634,12 @@ func (d *DisConnProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
-	if d.SessionExpiryInterval != 0 {
-		data := []byte{propKeySessionExpiryInterval, 0, 0, 0, 0}
-		putUint32(data[1:], d.SessionExpiryInterval)
-		result = append(result, data...)
-	}
-
-	if d.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(d.Reason)...)
-	}
-
-	if d.UserProps != nil {
-		d.UserProps.encodeTo(result)
-	}
-
-	if d.ServerRef != "" {
-		result = append(result, propKeyServerRef)
-		result = append(result, encodeStringWithLen(d.ServerRef)...)
-	}
-
-	return result
+	p := &propertySet{}
+	p.set(propKeySessionExpiryInterval, d.SessionExpiryInterval)
+	p.set(propKeyReasonString, d.Reason)
+	p.set(propKeyUserProps, d.UserProps)
+	p.set(propKeyServerRef, d.ServerRef)
+	return p.bytes()
 }
 
 func (d *DisConnProps) setProps(props map[byte][]byte) {

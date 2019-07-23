@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	pah "github.com/eclipse/paho.mqtt.golang"
+
 	lib "github.com/goiiot/libmqtt"
 )
 

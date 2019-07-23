@@ -18,6 +18,11 @@ package libmqtt
 
 import "bytes"
 
+var (
+	PingReqPacket  = &pingReqPacket{}
+	PingRespPacket = &pingRespPacket{}
+)
+
 // pingReqPacket is sent from a Client to the Server.
 //
 // It can be used to:
@@ -26,32 +31,32 @@ import "bytes"
 // 		3. Exercise the network to indicate that the Network Connection is active.
 //
 // This Packet is used in Keep Alive processing
-type PingReqPacket struct {
+type pingReqPacket struct {
 	BasePacket
 }
 
-func (p *PingReqPacket) Type() CtrlType {
+func (p *pingReqPacket) Type() CtrlType {
 	return CtrlPingReq
 }
 
-func (p *PingReqPacket) Bytes() []byte {
+func (p *pingReqPacket) Bytes() []byte {
 	if p == nil {
 		return nil
 	}
 
 	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
-func (p *PingReqPacket) WriteTo(w BufferedWriter) error {
+func (p *pingReqPacket) WriteTo(w BufferedWriter) error {
 	if p == nil {
 		return ErrEncodeBadPacket
 	}
 
 	switch p.Version() {
 	case V311, V5:
-		w.WriteByte(byte(CtrlPingReq << 4))
+		_ = w.WriteByte(CtrlPingReq << 4)
 		return w.WriteByte(0x00)
 	default:
 		return ErrUnsupportedVersion
@@ -60,32 +65,32 @@ func (p *PingReqPacket) WriteTo(w BufferedWriter) error {
 
 // pingRespPacket is sent by the Server to the Client in response to
 // a pingReqPacket. It indicates that the Server is alive.
-type PingRespPacket struct {
+type pingRespPacket struct {
 	BasePacket
 }
 
-func (p *PingRespPacket) Type() CtrlType {
+func (p *pingRespPacket) Type() CtrlType {
 	return CtrlPingResp
 }
 
-func (p *PingRespPacket) Bytes() []byte {
+func (p *pingRespPacket) Bytes() []byte {
 	if p == nil {
 		return nil
 	}
 
 	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
-func (p *PingRespPacket) WriteTo(w BufferedWriter) error {
+func (p *pingRespPacket) WriteTo(w BufferedWriter) error {
 	if p == nil {
 		return ErrEncodeBadPacket
 	}
 
 	switch p.Version() {
 	case V311, V5:
-		w.WriteByte(byte(CtrlPingResp << 4))
+		_ = w.WriteByte(CtrlPingResp << 4)
 		return w.WriteByte(0x00)
 	default:
 		return ErrUnsupportedVersion

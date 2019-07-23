@@ -24,14 +24,12 @@ import (
 var (
 	testAuthMsg = &AuthPacket{
 		BasePacket: BasePacket{ProtoVersion: V5},
-		Code:       CodeContinueAuth,
+		Code:       CodeReAuth,
 		Props: &AuthProps{
 			AuthMethod: "MQTT",
 			AuthData:   []byte("MQTT"),
 			Reason:     "MQTT",
-			UserProps: UserProps{
-				"MQ": []string{"TT"},
-			},
+			UserProps:  testConstUserProps,
 		},
 	}
 	testAuthMsgBytes []byte
@@ -40,41 +38,27 @@ var (
 		propKeyAuthMethod:   {0, 4, 'M', 'Q', 'T', 'T'},
 		propKeyAuthData:     {0, 4, 'M', 'Q', 'T', 'T'},
 		propKeyReasonString: {0, 4, 'M', 'Q', 'T', 'T'},
-		propKeyUserProps: {
-			0, 2, 'M', 'Q', 0, 2, 'T', 'T',
-		},
+		propKeyUserProps:    testConstUserPropsBytes,
 	}
 
-	testAuthPropsBytes = []byte{
+	testAuthPropsBytes = append([]byte{
 		propKeyAuthMethod, 0, 4, 'M', 'Q', 'T', 'T',
 		propKeyAuthData, 0, 4, 'M', 'Q', 'T', 'T',
 		propKeyReasonString, 0, 4, 'M', 'Q', 'T', 'T',
-		propKeyUserProps, 0, 2, 'M', 'Q', 0, 2, 'T', 'T',
-	}
+		propKeyUserProps}, testConstUserPropsBytes...)
 )
 
 func initTestData_Auth() {
-	buf := &bytes.Buffer{}
-	buf.Write([]byte{0xF0}) // fixed header
-	varHeader := []byte{CodeContinueAuth}
-
-	tmpBuf := &bytes.Buffer{}
-	writeVarInt(len(testAuthPropsBytes), tmpBuf)
-	varHeader = append(varHeader, tmpBuf.Bytes()...)
-	varHeader = append(varHeader, testAuthPropsBytes...)
-	writeVarInt(len(varHeader), buf)
-	buf.Write(varHeader)
-	testAuthMsgBytes = buf.Bytes()
+	testAuthMsgBytes = newV5TestPacketBytes(CtrlAuth, 0, append([]byte{CodeReAuth}, testAuthPropsBytes...), nil)
 }
 
 func TestAuthPacket_Bytes(t *testing.T) {
-	testAuthMsg.ProtoVersion = V5
-	testPacketBytes(testAuthMsg, testAuthMsgBytes, t)
+	testPacketBytes(V5, testAuthMsg, testAuthMsgBytes, t)
 }
 
 func TestAuthProps_Props(t *testing.T) {
 	propsBytes := testAuthMsg.Props.props()
-	if bytes.Compare(propsBytes, testAuthPropsBytes) != 0 {
+	if !bytes.Equal(propsBytes, testAuthPropsBytes) {
 		t.Errorf("auth props bytes not math:\ntarget: %v\ngenerated: %v", testAuthPropsBytes, propsBytes)
 	}
 }
@@ -104,6 +88,8 @@ func TestAuthProps_SetProps(t *testing.T) {
 					}
 				}
 				continue
+			} else {
+				t.Error("auth user props length not equal")
 			}
 		}
 	}

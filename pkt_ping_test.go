@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	testPingReqMsg       = &PingReqPacket{}
+	testPingReqMsg       = PingReqPacket
 	testPingReqMsgBytes  []byte
-	testPingRespMsg      = &PingRespPacket{}
+	testPingRespMsg      = PingRespPacket
 	testPingRespMsgBytes []byte
 )
 
@@ -34,20 +34,22 @@ func initTestData_Ping() {
 	// pingreq
 	reqBuf := &bytes.Buffer{}
 	req := std.NewControlPacket(std.Pingreq).(*std.PingreqPacket)
-	req.Write(reqBuf)
+	_ = req.Write(reqBuf)
 	testPingReqMsgBytes = reqBuf.Bytes()
 
 	// pingresp
 	respBuf := &bytes.Buffer{}
 	resp := std.NewControlPacket(std.Pingresp).(*std.PingrespPacket)
-	resp.Write(respBuf)
+	_ = resp.Write(respBuf)
 	testPingRespMsgBytes = respBuf.Bytes()
 }
 
 func TestPingReqPacket_Bytes(t *testing.T) {
-	testPacketBytes(testPingReqMsg, testPingReqMsgBytes, t)
+	testPacketBytes(V311, testPingReqMsg, testPingReqMsgBytes, t)
+	testPacketBytes(V5, testPingReqMsg, testPingReqMsgBytes, t)
 }
 
 func TestPingRespPacket_Bytes(t *testing.T) {
-	testPacketBytes(testPingRespMsg, testPingRespMsgBytes, t)
+	testPacketBytes(V311, testPingRespMsg, testPingRespMsgBytes, t)
+	testPacketBytes(V5, testPingRespMsg, testPingRespMsgBytes, t)
 }

@@ -25,11 +25,39 @@ import (
 
 // pub test data
 var (
-	testPubMsgs    []*PublishPacket
-	testPubAckMsg  = &PubAckPacket{PacketID: testPacketID}
-	testPubRecvMsg = &PubRecvPacket{PacketID: testPacketID}
-	testPubRelMsg  = &PubRelPacket{PacketID: testPacketID}
-	testPubCompMsg = &PubCompPacket{PacketID: testPacketID}
+	testPubMsgs   []*PublishPacket
+	testPubAckMsg = &PubAckPacket{
+		PacketID: testPacketID,
+		Code:     CodeUnspecifiedError,
+		Props: &PubAckProps{
+			Reason:    "MQTT",
+			UserProps: testConstUserProps,
+		},
+	}
+	testPubRecvMsg = &PubRecvPacket{
+		PacketID: testPacketID,
+		Code:     CodeUnspecifiedError,
+		Props: &PubRecvProps{
+			Reason:    "MQTT",
+			UserProps: testConstUserProps,
+		},
+	}
+	testPubRelMsg = &PubRelPacket{
+		PacketID: testPacketID,
+		Code:     CodeUnspecifiedError,
+		Props: &PubRelProps{
+			Reason:    "MQTT",
+			UserProps: testConstUserProps,
+		},
+	}
+	testPubCompMsg = &PubCompPacket{
+		PacketID: testPacketID,
+		Code:     CodeUnspecifiedError,
+		Props: &PubCompProps{
+			Reason:    "MQTT",
+			UserProps: testConstUserProps,
+		},
+	}
 
 	// mqtt 3.1.1
 	testPubMsgBytesV311     [][]byte
@@ -48,17 +76,30 @@ var (
 
 // init pub test data
 func initTestData_Pub() {
-	// pub
-	testPubMsgs = make([]*PublishPacket, len(testTopics))
-	testPubMsgBytesV311 = make([][]byte, len(testTopics))
-	testPubMsgBytesV5 = make([][]byte, len(testTopics))
+	size := len(testTopics)
+
+	testPubMsgs = make([]*PublishPacket, size)
+	testPubMsgBytesV311 = make([][]byte, size)
+	testPubMsgBytesV5 = make([][]byte, size)
+
 	for i := range testTopics {
+		msgID := uint16(i + 1)
 		testPubMsgs[i] = &PublishPacket{
 			IsDup:     testPubDup,
 			TopicName: testTopics[i],
 			Qos:       testTopicQos[i],
 			Payload:   []byte(testTopicMsgs[i]),
-			PacketID:  testPacketID,
+			PacketID:  msgID,
+			Props: &PublishProps{
+				PayloadFormat:         100,
+				MessageExpiryInterval: 100,
+				TopicAlias:            100,
+				RespTopic:             "MQTT",
+				CorrelationData:       []byte("MQTT"),
+				UserProps:             testConstUserProps,
+				SubIDs:                []int{1, 2, 3},
+				ContentType:           "MQTT",
+			},
 		}
 
 		// create standard publish packet and make bytes
@@ -69,49 +110,51 @@ func initTestData_Pub() {
 		}).(*std.PublishPacket)
 		pkt.TopicName = testTopics[i]
 		pkt.Payload = []byte(testTopicMsgs[i])
-		pkt.MessageID = uint16(i)
+		pkt.MessageID = msgID
 
 		buf := &bytes.Buffer{}
-		pkt.Write(buf)
+		_ = pkt.Write(buf)
 		testPubMsgBytesV311[i] = buf.Bytes()
+		testPubMsgBytesV5[i] = newV5TestPacketBytes(CtrlPublish, 0, nil, nil)
 	}
 
 	// puback
 	pubAckPkt := std.NewControlPacket(std.Puback).(*std.PubackPacket)
 	pubAckPkt.MessageID = testPacketID
 	pubAckBuf := &bytes.Buffer{}
-	pubAckPkt.Write(pubAckBuf)
+	_ = pubAckPkt.Write(pubAckBuf)
 	testPubAckMsgBytesV311 = pubAckBuf.Bytes()
+	testPubAckMsgBytesV5 = newV5TestPacketBytes(CtrlPubAck, 0, nil, nil)
 
 	// pubrecv
 	pubRecvBuf := &bytes.Buffer{}
 	pubRecPkt := std.NewControlPacket(std.Pubrec).(*std.PubrecPacket)
 	pubRecPkt.MessageID = testPacketID
-	pubRecPkt.Write(pubRecvBuf)
+	_ = pubRecPkt.Write(pubRecvBuf)
 	testPubRecvMsgBytesV311 = pubRecvBuf.Bytes()
+	testPubRecvMsgBytesV5 = newV5TestPacketBytes(CtrlPubRecv, 0, nil, nil)
 
 	// pubrel
 	pubRelBuf := &bytes.Buffer{}
 	pubRelPkt := std.NewControlPacket(std.Pubrel).(*std.PubrelPacket)
 	pubRelPkt.MessageID = testPacketID
-	pubRelPkt.Write(pubRelBuf)
+	_ = pubRelPkt.Write(pubRelBuf)
 	testPubRelMsgBytesV311 = pubRelBuf.Bytes()
+	testPubRelMsgBytesV5 = newV5TestPacketBytes(CtrlPubRel, 0, nil, nil)
 
 	// pubcomp
 	pubCompBuf := &bytes.Buffer{}
 	pubCompPkt := std.NewControlPacket(std.Pubcomp).(*std.PubcompPacket)
 	pubCompPkt.MessageID = testPacketID
-	pubCompPkt.Write(pubCompBuf)
+	_ = pubCompPkt.Write(pubCompBuf)
 	testPubCompMsgBytesV311 = pubCompBuf.Bytes()
+	testPubCompMsgBytesV5 = newV5TestPacketBytes(CtrlPubComp, 0, nil, nil)
 }
 
 func TestPublishPacket_Bytes(t *testing.T) {
 	for i, p := range testPubMsgs {
-		p.ProtoVersion = V311
-		testPacketBytes(p, testPubMsgBytesV311[i], t)
-		// p.ProtoVersion = V5
-		// testPacketBytes(p, testPubMsgBytesV5[i], t)
-		// testV5Bytes(p, testPubMsgBytesV5[i], t)
+		testPacketBytes(V311, p, testPubMsgBytesV311[i], t)
+		testPacketBytes(V5, p, testPubMsgBytesV5[i], t)
 	}
 }
 
@@ -124,10 +167,8 @@ func TestPubProps_SetProps(t *testing.T) {
 }
 
 func TestPubAckPacket_Bytes(t *testing.T) {
-	testPubAckMsg.ProtoVersion = V311
-	testPacketBytes(testPubAckMsg, testPubAckMsgBytesV311, t)
-	// testPubAckMsg.ProtoVersion = V5
-	// testPacketBytes(testPubAckMsg, testPubAckMsgBytesV5, t)
+	testPacketBytes(V311, testPubAckMsg, testPubAckMsgBytesV311, t)
+	testPacketBytes(V5, testPubAckMsg, testPubAckMsgBytesV5, t)
 }
 
 func TestPubAckProps_Props(t *testing.T) {
@@ -139,10 +180,8 @@ func TestPubAckProps_SetProps(t *testing.T) {
 }
 
 func TestPubRecvPacket_Bytes(t *testing.T) {
-	testPubRecvMsg.ProtoVersion = V311
-	testPacketBytes(testPubRecvMsg, testPubRecvMsgBytesV311, t)
-	// testPubRecvMsg.ProtoVersion = V5
-	// testPacketBytes(testPubRecvMsg, testPubRecvMsgBytesV5, t)
+	testPacketBytes(V311, testPubRecvMsg, testPubRecvMsgBytesV311, t)
+	testPacketBytes(V5, testPubRecvMsg, testPubRecvMsgBytesV5, t)
 }
 
 func TestPubRecvProps_Props(t *testing.T) {
@@ -154,10 +193,8 @@ func TestPubRecvProps_SetProps(t *testing.T) {
 }
 
 func TestPubRelPacket_Bytes(t *testing.T) {
-	testPubRelMsg.ProtoVersion = V311
-	testPacketBytes(testPubRelMsg, testPubRelMsgBytesV311, t)
-	// testPubRelMsg.ProtoVersion = V5
-	// testPacketBytes(testPubRelMsg, testPubRelMsgBytesV5, t)
+	testPacketBytes(V311, testPubRelMsg, testPubRelMsgBytesV311, t)
+	testPacketBytes(V5, testPubRelMsg, testPubRelMsgBytesV5, t)
 }
 
 func TestPubRelProps_Props(t *testing.T) {
@@ -169,10 +206,8 @@ func TestPubRelProps_SetProps(t *testing.T) {
 }
 
 func TestPubCompPacket_Bytes(t *testing.T) {
-	testPubCompMsg.ProtoVersion = V311
-	testPacketBytes(testPubCompMsg, testPubCompMsgBytesV311, t)
-	// testPubCompMsg.ProtoVersion = V5
-	// testPacketBytes(testPubCompMsg, testPubCompMsgBytesV5, t)
+	testPacketBytes(V311, testPubCompMsg, testPubCompMsgBytesV311, t)
+	testPacketBytes(V5, testPubCompMsg, testPubCompMsgBytesV5, t)
 }
 
 func TestPubCompProps_Props(t *testing.T) {

@@ -42,7 +42,7 @@ func (a *AuthPacket) Bytes() []byte {
 	}
 
 	w := &bytes.Buffer{}
-	a.WriteTo(w)
+	_ = a.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -51,20 +51,7 @@ func (a *AuthPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	w.WriteByte(byte(CtrlAuth << 4))
-	props := a.Props.props()
-
-	tmpBuf := &bytes.Buffer{}
-	writeVarInt(len(props), tmpBuf)
-
-	if err := writeVarInt(len(props)+1+tmpBuf.Len(), w); err != nil {
-		return err
-	}
-
-	w.WriteByte(a.Code)
-	tmpBuf.WriteTo(w)
-	_, err := w.Write(props)
-	return err
+	return a.writeV5(w, CtrlAuth<<4, []byte{a.Code}, a.Props.props(), nil)
 }
 
 // AuthProps properties of AuthPacket
@@ -81,25 +68,11 @@ func (a *AuthProps) props() []byte {
 	}
 
 	result := make([]byte, 0)
-	if a.AuthMethod != "" {
-		result = append(result, propKeyAuthMethod)
-		result = append(result, encodeStringWithLen(a.AuthMethod)...)
-	}
-
-	if a.AuthData != nil {
-		result = append(result, propKeyAuthData)
-		result = append(result, encodeBytesWithLen(a.AuthData)...)
-	}
-
-	if a.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(a.Reason)...)
-	}
-
-	if a.UserProps != nil {
-		result = a.UserProps.encodeTo(result)
-	}
-
+	p := propertySet{}
+	p.set(propKeyAuthMethod, a.AuthMethod)
+	p.set(propKeyAuthData, a.AuthData)
+	p.set(propKeyReasonString, a.Reason)
+	p.set(propKeyUserProps, a.UserProps)
 	return result
 }
 

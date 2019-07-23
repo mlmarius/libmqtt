@@ -122,6 +122,28 @@ func encodeBytesWithLen(data []byte) []byte {
 	return append(result, data...)
 }
 
+func varIntBytes(n int) ([]byte, error) {
+	if n < 0 || n > maxMsgSize {
+		return nil, ErrEncodeLargePacket
+	}
+
+	if n == 0 {
+		return []byte{0}, nil
+	}
+
+	var ret []byte
+	for n > 0 {
+		encodedByte := byte(n % 128)
+		n /= 128
+		if n > 0 {
+			encodedByte |= 128
+		}
+		ret = append(ret, encodedByte)
+	}
+
+	return ret, nil
+}
+
 func writeVarInt(n int, w BufferedWriter) error {
 	if n < 0 || n > maxMsgSize {
 		return ErrEncodeLargePacket
