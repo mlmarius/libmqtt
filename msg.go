@@ -91,23 +91,23 @@ func (c *AsyncClient) handleMsg() {
 			switch m.what {
 			case pubMsg:
 				if c.pubHandler != nil {
-					c.addWorker(func() { c.pubHandler(m.msg, m.err) })
+					c.addWorker(func() { c.pubHandler(c, m.msg, m.err) })
 				}
 			case subMsg:
 				if c.subHandler != nil {
-					c.addWorker(func() { c.subHandler(m.obj.([]*Topic), m.err) })
+					c.addWorker(func() { c.subHandler(c, m.obj.([]*Topic), m.err) })
 				}
 			case unSubMsg:
-				if c.unSubHandler != nil {
-					c.addWorker(func() { c.unSubHandler(m.obj.([]string), m.err) })
+				if c.unsubHandler != nil {
+					c.addWorker(func() { c.unsubHandler(c, m.obj.([]string), m.err) })
 				}
 			case netMsg:
 				if c.netHandler != nil {
-					c.addWorker(func() { c.netHandler(m.msg, m.err) })
+					c.addWorker(func() { c.netHandler(c, m.msg, m.err) })
 				}
 			case persistMsg:
 				if c.persistHandler != nil {
-					c.addWorker(func() { c.persistHandler(m.obj.(Packet), m.err) })
+					c.addWorker(func() { c.persistHandler(c, m.obj.(Packet), m.err) })
 				}
 			}
 		}

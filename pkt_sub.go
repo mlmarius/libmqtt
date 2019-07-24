@@ -207,21 +207,23 @@ func (p *SubAckProps) setProps(props map[byte][]byte) {
 	}
 }
 
-// UnSubPacket is sent by the Client to the Server,
+type UnSubPacket = UnsubPacket
+
+// UnsubPacket is sent by the Client to the Server,
 // to unsubscribe from topics.
-type UnSubPacket struct {
+type UnsubPacket struct {
 	BasePacket
 	PacketID   uint16
 	TopicNames []string
-	Props      *UnSubProps
+	Props      *UnsubProps
 }
 
-// Type of UnSubPacket is CtrlUnSub
-func (s *UnSubPacket) Type() CtrlType {
+// Type of UnsubPacket is CtrlUnSub
+func (s *UnsubPacket) Type() CtrlType {
 	return CtrlUnSub
 }
 
-func (s *UnSubPacket) Bytes() []byte {
+func (s *UnsubPacket) Bytes() []byte {
 	if s == nil {
 		return nil
 	}
@@ -231,7 +233,7 @@ func (s *UnSubPacket) Bytes() []byte {
 	return w.Bytes()
 }
 
-func (s *UnSubPacket) WriteTo(w BufferedWriter) error {
+func (s *UnsubPacket) WriteTo(w BufferedWriter) error {
 	if s == nil {
 		return ErrEncodeBadPacket
 	}
@@ -248,7 +250,7 @@ func (s *UnSubPacket) WriteTo(w BufferedWriter) error {
 	}
 }
 
-func (s *UnSubPacket) payload() []byte {
+func (s *UnsubPacket) payload() []byte {
 	result := make([]byte, 0)
 	if s.TopicNames != nil {
 		for _, t := range s.TopicNames {
@@ -258,13 +260,15 @@ func (s *UnSubPacket) payload() []byte {
 	return result
 }
 
-// UnSubProps properties for UnSubPacket
-type UnSubProps struct {
+type UnSubProps = UnsubProps
+
+// UnsubProps properties for UnsubPacket
+type UnsubProps struct {
 	// UserProps User defined Properties
 	UserProps UserProps
 }
 
-func (p *UnSubProps) props() []byte {
+func (p *UnsubProps) props() []byte {
 	if p == nil {
 		return nil
 	}
@@ -276,7 +280,7 @@ func (p *UnSubProps) props() []byte {
 	return propSet.bytes()
 }
 
-func (p *UnSubProps) setProps(props map[byte][]byte) {
+func (p *UnsubProps) setProps(props map[byte][]byte) {
 	if p == nil || props == nil {
 		return
 	}
@@ -286,20 +290,22 @@ func (p *UnSubProps) setProps(props map[byte][]byte) {
 	}
 }
 
-// UnSubAckPacket is sent by the Server to the Client to confirm
-// receipt of an UnSubPacket
-type UnSubAckPacket struct {
+type UnSubAckPacket = UnsubAckPacket
+
+// UnsubAckPacket is sent by the Server to the Client to confirm
+// receipt of an UnsubPacket
+type UnsubAckPacket struct {
 	BasePacket
 	PacketID uint16
-	Props    *UnSubAckProps
+	Props    *UnsubAckProps
 }
 
-// Type of UnSubAckPacket is CtrlUnSubAck
-func (s *UnSubAckPacket) Type() CtrlType {
+// Type of UnsubAckPacket is CtrlUnSubAck
+func (s *UnsubAckPacket) Type() CtrlType {
 	return CtrlUnSubAck
 }
 
-func (s *UnSubAckPacket) Bytes() []byte {
+func (s *UnsubAckPacket) Bytes() []byte {
 	if s == nil {
 		return nil
 	}
@@ -309,7 +315,7 @@ func (s *UnSubAckPacket) Bytes() []byte {
 	return w.Bytes()
 }
 
-func (s *UnSubAckPacket) WriteTo(w BufferedWriter) error {
+func (s *UnsubAckPacket) WriteTo(w BufferedWriter) error {
 	if s == nil {
 		return ErrEncodeBadPacket
 	}
@@ -326,8 +332,10 @@ func (s *UnSubAckPacket) WriteTo(w BufferedWriter) error {
 	}
 }
 
-// UnSubAckProps properties for UnSubAckPacket
-type UnSubAckProps struct {
+type UnSubAckProps = UnsubAckProps
+
+// UnsubAckProps properties for UnsubAckPacket
+type UnsubAckProps struct {
 	// Human readable string designed for diagnostics
 	Reason string
 
@@ -335,7 +343,7 @@ type UnSubAckProps struct {
 	UserProps UserProps
 }
 
-func (p *UnSubAckProps) props() []byte {
+func (p *UnsubAckProps) props() []byte {
 	if p == nil {
 		return nil
 	}
@@ -351,7 +359,7 @@ func (p *UnSubAckProps) props() []byte {
 	return propSet.bytes()
 }
 
-func (p *UnSubAckProps) setProps(props map[byte][]byte) {
+func (p *UnsubAckProps) setProps(props map[byte][]byte) {
 	if p == nil || props == nil {
 		return
 	}

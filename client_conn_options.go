@@ -62,7 +62,7 @@ func defaultConnectOptions() connectOptions {
 
 // connect options when connecting server (for conn packet)
 type connectOptions struct {
-	connHandler     ConnHandler
+	connHandler     ConnHandleFunc
 	dialTimeout     time.Duration
 	protoVersion    ProtoVersion
 	protoCompromise bool
@@ -93,7 +93,7 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 	if err != nil {
 		parent.log.e("CLI connect server failed, err =", err, ", server =", server)
 		if c.connHandler != nil {
-			parent.addWorker(func() { c.connHandler(server, math.MaxUint8, err) })
+			parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, err) })
 		}
 
 		if c.autoReconnect && !parent.isClosing() {
@@ -136,7 +136,7 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 		case pkt, more := <-connImpl.netRecvC:
 			if !more {
 				if c.connHandler != nil {
-					parent.addWorker(func() { c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket) })
+					parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
 				close(connImpl.logicSendC)
 				return
@@ -155,14 +155,14 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 					}
 
 					if c.connHandler != nil {
-						parent.addWorker(func() { c.connHandler(server, p.Code, nil) })
+						parent.addWorker(func() { c.connHandler(parent, server, p.Code, nil) })
 					}
 					return
 				}
 			default:
 				close(connImpl.logicSendC)
 				if c.connHandler != nil {
-					parent.addWorker(func() { c.connHandler(server, math.MaxUint8, ErrDecodeBadPacket) })
+					parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
 				return
 			}
@@ -172,7 +172,7 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 
 		parent.log.i("CLI connected to server =", server)
 		if c.connHandler != nil {
-			parent.addWorker(func() { c.connHandler(server, CodeSuccess, nil) })
+			parent.addWorker(func() { c.connHandler(parent, server, CodeSuccess, nil) })
 		}
 
 		// start mqtt logic

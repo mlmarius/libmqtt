@@ -41,7 +41,12 @@ func ExampleClient() {
 		// use RegexRouter for topic routing if not specified
 		// will use TextRouter, which will match full text
 		libmqtt.WithRouter(libmqtt.NewRegexRouter()),
-		libmqtt.WithConnHandleFunc(createConnHandleFunc(client)),
+		libmqtt.WithConnHandleFunc(connHandler),
+		libmqtt.WithNetHandleFunc(netHandler),
+		libmqtt.WithSubHandleFunc(subHandler),
+		libmqtt.WithUnsubHandleFunc(unSubHandler),
+		libmqtt.WithPubHandleFunc(pubHandler),
+		libmqtt.WithPersistHandleFunc(persistHandler),
 	)
 
 	if err != nil {
@@ -49,23 +54,28 @@ func ExampleClient() {
 		panic("hmm, how could it failed")
 	}
 
-	setupHandlers(client)
+	// handle every subscribed message (just for example)
+	client.HandleTopic(".*", func(client libmqtt.Client, topic string, qos libmqtt.QosLevel, msg []byte) {
+		log.Printf("[%v] message: %v", topic, string(msg))
+	})
 
 	// connect to server
 
-	// tcp server
+	// connect tcp server
 	err = client.ConnectServer("test.mosquitto.org:1883")
 
-	// tcp (tls) server
+	// connect a tcp (tls) server
 	//
-	// set `libmqtt.WithTLS` or `libmqtt.WithTLSReader` to use client tls certificate
+	// use `libmqtt.WithTLS` or `libmqtt.WithTLSReader` to use client tls certificate
+	// and to use customized tls config, you should use `libmqtt.WithCustomTLS`
 	err = client.ConnectServer("test.mosquitto.org:8883",
 		libmqtt.WithCustomTLS(nil))
 
-	// websocket server
-	err = client.ConnectServer("test.mosquitto.org:8080")
+	// connect to a websocket server
+	err = client.ConnectServer("test.mosquitto.org:8080",
+		libmqtt.WithWebSocketConnector(0, nil))
 
-	// websocket (tls) server
+	// connect to a websocket (tls) server
 	err = client.ConnectServer("test.mosquitto.org:8081",
 		libmqtt.WithCustomTLS(nil),
 		libmqtt.WithWebSocketConnector(0, nil))
@@ -73,87 +83,77 @@ func ExampleClient() {
 	client.Wait()
 }
 
-func createConnHandleFunc(client libmqtt.Client) libmqtt.ConnHandler {
-	return func(server string, code byte, err error) {
-		if err != nil {
-			log.Printf("connect to server [%v] failed: %v", server, err)
-			return
-		}
+func connHandler(client libmqtt.Client, server string, code byte, err error) {
+	if err != nil {
+		log.Printf("connect to server [%v] failed: %v", server, err)
+		return
+	}
 
-		if code != libmqtt.CodeSuccess {
-			log.Printf("connect to server [%v] failed with server code [%v]", server, code)
-			return
-		}
+	if code != libmqtt.CodeSuccess {
+		log.Printf("connect to server [%v] failed with server code [%v]", server, code)
+		return
+	}
 
-		// connected
-		go func() {
-			// subscribe to some topics
-			client.Subscribe([]*libmqtt.Topic{
-				{Name: "foo", Qos: libmqtt.Qos0},
-				{Name: "bar", Qos: libmqtt.Qos1},
-			}...)
+	// connected
+	go func() {
+		// subscribe to some topics
+		client.Subscribe([]*libmqtt.Topic{
+			{Name: "foo", Qos: libmqtt.Qos0},
+			{Name: "bar", Qos: libmqtt.Qos1},
+		}...)
 
-			// in this example, we publish packets right after subscribe succeeded
-			// see `client.HandleSub`
-		}()
+		// in this example, we publish packets right after subscribe succeeded
+		// see `client.HandleSub`
+	}()
+}
+
+func netHandler(client libmqtt.Client, server string, err error) {
+	if err != nil {
+		log.Printf("error happened to connection to server [%v]: %v", server, err)
 	}
 }
 
-func setupHandlers(client libmqtt.Client) {
-	// register net handler
-	client.HandleNet(func(server string, err error) {
-		if err != nil {
-			log.Printf("error happened to connection to server [%v]: %v", server, err)
-		}
-	})
-	// register persist handler, you don't need this if all your message had QoS 0
-	client.HandlePersist(func(err error) {
-		if err != nil {
-			log.Printf("session persist error: %v", err)
-		}
-	})
-	// register subscribe handler
-	client.HandleSub(func(topics []*libmqtt.Topic, err error) {
-		if err != nil {
-			for _, t := range topics {
-				log.Printf("subscribe to topic [%v] failed: %v", t.Name, err)
-			}
-		} else {
-			for _, t := range topics {
-				log.Printf("subscribe to topic [%v] success: %v", t.Name, err)
-			}
+func persistHandler(client libmqtt.Client, packet libmqtt.Packet, err error) {
+	if err != nil {
+		log.Printf("session persist error: %v", err)
+	}
+}
 
-			// publish some packet (just for example)
-			client.Publish([]*libmqtt.PublishPacket{
-				{TopicName: "foo", Payload: []byte("bar"), Qos: libmqtt.Qos0},
-				{TopicName: "bar", Payload: []byte("foo"), Qos: libmqtt.Qos1},
-			}...)
+func subHandler(client libmqtt.Client, topics []*libmqtt.Topic, err error) {
+	if err != nil {
+		for _, t := range topics {
+			log.Printf("subscribe to topic [%v] failed: %v", t.Name, err)
 		}
-	})
-	// register unsubscribe handler
-	client.HandleUnSub(func(topic []string, err error) {
-		if err != nil {
-			// handle unsubscribe failure
-			for _, t := range topic {
-				log.Printf("unsubscribe to topic [%v] failed: %v", t, err)
-			}
-		} else {
-			for _, t := range topic {
-				log.Printf("unsubscribe to topic [%v] failed: %v", t, err)
-			}
+	} else {
+		for _, t := range topics {
+			log.Printf("subscribe to topic [%v] success: %v", t.Name, err)
 		}
-	})
-	// register publish handler
-	client.HandlePub(func(topic string, err error) {
-		if err != nil {
-			log.Printf("publish packet to topic [%v] failed: %v", topic, err)
-		} else {
-			log.Printf("publish packet to topic [%v] success: %v", topic, err)
-		}
-	})
 
-	// handle every subscribed message (just for example)
-	client.Handle(".*", func(topic string, qos libmqtt.QosLevel, msg []byte) {
-		log.Printf("[%v] message: %v", topic, string(msg))
-	})
+		// publish some packet (just for example)
+		client.Publish([]*libmqtt.PublishPacket{
+			{TopicName: "foo", Payload: []byte("bar"), Qos: libmqtt.Qos0},
+			{TopicName: "bar", Payload: []byte("foo"), Qos: libmqtt.Qos1},
+		}...)
+	}
+}
+
+func unSubHandler(client libmqtt.Client, topic []string, err error) {
+	if err != nil {
+		// handle unsubscribe failure
+		for _, t := range topic {
+			log.Printf("unsubscribe to topic [%v] failed: %v", t, err)
+		}
+	} else {
+		for _, t := range topic {
+			log.Printf("unsubscribe to topic [%v] failed: %v", t, err)
+		}
+	}
+}
+
+func pubHandler(client libmqtt.Client, topic string, err error) {
+	if err != nil {
+		log.Printf("publish packet to topic [%v] failed: %v", topic, err)
+	} else {
+		log.Printf("publish packet to topic [%v] success: %v", topic, err)
+	}
 }

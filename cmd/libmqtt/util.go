@@ -20,7 +20,7 @@ import (
 	mqtt "github.com/goiiot/libmqtt"
 )
 
-func connHandler(server string, code byte, err error) {
+func connHandler(client mqtt.Client, server string, code byte, err error) {
 	if err != nil {
 		println("\nconnect to server error:", err)
 	} else if code != mqtt.CodeSuccess {
@@ -31,7 +31,7 @@ func connHandler(server string, code byte, err error) {
 	print(lineStart)
 }
 
-func pubHandler(topic string, err error) {
+func pubHandler(client mqtt.Client, topic string, err error) {
 	if err != nil {
 		println("\npub", topic, "failed, error =", err)
 	} else {
@@ -40,7 +40,7 @@ func pubHandler(topic string, err error) {
 	print(lineStart)
 }
 
-func subHandler(topics []*mqtt.Topic, err error) {
+func subHandler(client mqtt.Client, topics []*mqtt.Topic, err error) {
 	if err != nil {
 		println("\nsub", topics, "failed, error =", err)
 	} else {
@@ -49,7 +49,7 @@ func subHandler(topics []*mqtt.Topic, err error) {
 	print(lineStart)
 }
 
-func unSubHandler(topics []string, err error) {
+func unSubHandler(client mqtt.Client, topics []string, err error) {
 	if err != nil {
 		println("\nunsub", topics, "failed, error =", err)
 	} else {
@@ -58,12 +58,12 @@ func unSubHandler(topics []string, err error) {
 	print(lineStart)
 }
 
-func netHandler(server string, err error) {
+func netHandler(client mqtt.Client, server string, err error) {
 	println("\nconnection to server, error:", err)
 	print(lineStart)
 }
 
-func topicHandler(topic string, qos mqtt.QosLevel, msg []byte) {
+func topicHandler(client mqtt.Client, topic string, qos mqtt.QosLevel, msg []byte) {
 	println("\n[MSG] topic:", topic, "msg:", string(msg), "qos:", qos)
 	print(lineStart)
 }

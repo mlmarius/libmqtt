@@ -62,11 +62,11 @@ type AsyncClient struct {
 	log              *logger         // client logger
 
 	// success/error handlers
-	pubHandler     PubHandler
-	subHandler     SubHandler
-	unSubHandler   UnSubHandler
-	netHandler     NetHandler
-	persistHandler PersistHandler
+	pubHandler     PubHandleFunc
+	subHandler     SubHandleFunc
+	unsubHandler   UnsubHandleFunc
+	netHandler     NetHandleFunc
+	persistHandler PersistHandleFunc
 
 	ctx     context.Context    // closure of this channel will signal all client worker to stop
 	exit    context.CancelFunc // called when client exit
@@ -99,7 +99,19 @@ func defaultClient() *AsyncClient {
 }
 
 // Handle register subscription message route
+//
+// Deprecated: use HandleTopic instead, will be removed in v1.0
 func (c *AsyncClient) Handle(topic string, h TopicHandler) {
+	if h != nil {
+		c.log.v("CLI registered topic handler, topic =", topic)
+		c.router.Handle(topic, func(client Client, topic string, qos QosLevel, msg []byte) {
+			h(topic, qos, msg)
+		})
+	}
+}
+
+// HandleTopic add a topic routing rule
+func (c *AsyncClient) HandleTopic(topic string, h TopicHandleFunc) {
 	if h != nil {
 		c.log.v("CLI registered topic handler, topic =", topic)
 		c.router.Handle(topic, h)
@@ -112,16 +124,20 @@ func (c *AsyncClient) Handle(topic string, h TopicHandler) {
 func (c *AsyncClient) Connect(h ConnHandler) {
 	c.log.v("CLI connect to server, handler =", h)
 
+	connHandler := func(client Client, server string, code byte, err error) {
+		h(server, code, err)
+	}
+
 	for _, s := range c.servers {
 		options := c.options.clone()
-		options.connHandler = h
+		options.connHandler = connHandler
 
 		c.addWorker(func() { options.connect(c, s, c.options.protoVersion, c.options.firstDelay) })
 	}
 
 	for _, s := range c.secureServers {
 		secureOptions := c.options.clone()
-		secureOptions.connHandler = h
+		secureOptions.connHandler = connHandler
 		secureOptions.tlsConfig = &tls.Config{
 			ServerName: strings.SplitN(s, ":", 1)[0],
 		}
@@ -183,14 +199,20 @@ func (c *AsyncClient) Subscribe(topics ...*Topic) {
 }
 
 // UnSubscribe topic(s)
+// Deprecated: use Unsubscribe instead, will be removed in v1.0
 func (c *AsyncClient) UnSubscribe(topics ...string) {
+	c.Unsubscribe(topics...)
+}
+
+// Unsubscribe topic(s)
+func (c *AsyncClient) Unsubscribe(topics ...string) {
 	if c.isClosing() {
 		return
 	}
 
 	c.log.d("CLI unsubscribe topic(s) =", topics)
 
-	u := &UnSubPacket{TopicNames: topics}
+	u := &UnsubPacket{TopicNames: topics}
 	u.PacketID = c.idGen.next(u)
 
 	select {
@@ -211,14 +233,14 @@ func (c *AsyncClient) Wait() {
 }
 
 // Destroy will disconnect form all server
-// If force is true, then close connection without sending a DisConnPacket
+// If force is true, then close connection without sending a DisconnPacket
 func (c *AsyncClient) Destroy(force bool) {
 	c.log.d("CLI destroying client with force =", force)
 	if force {
 		c.exit()
 	} else {
 		c.connectedServers.Range(func(key, value interface{}) bool {
-			c.DisConnect(key.(string), nil)
+			c.Disconnect(key.(string), nil)
 			return true
 		})
 
@@ -226,11 +248,11 @@ func (c *AsyncClient) Destroy(force bool) {
 	}
 }
 
-// DisConnect from one server
-// return true if DisConnPacket will be sent
-func (c *AsyncClient) DisConnect(server string, packet *DisConnPacket) bool {
+// Disconnect from one server
+// return true if DisconnPacket will be sent
+func (c *AsyncClient) Disconnect(server string, packet *DisconnPacket) bool {
 	if packet == nil {
-		packet = &DisConnPacket{}
+		packet = &DisconnPacket{}
 	}
 
 	if val, ok := c.connectedServers.Load(server); ok {
@@ -284,7 +306,7 @@ func (c *AsyncClient) handleTopicMsg() {
 				return
 			}
 
-			c.addWorker(func() { c.router.Dispatch(pkt) })
+			c.addWorker(func() { c.router.Dispatch(c, pkt) })
 		}
 	}
 }

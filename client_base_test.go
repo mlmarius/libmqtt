@@ -61,7 +61,7 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 			WillMessage: []byte("test data"),
 		}),
 		WithConnHandleFunc(testConnHandler(&c, t, handler)),
-		WithPubHandleFunc(func(topic string, err error) {
+		WithPubHandleFunc(func(client Client, topic string, err error) {
 			if err != nil {
 				t.Error(err)
 				t.FailNow()
@@ -72,7 +72,7 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 				handler.afterPubSuccess(c)
 			}
 		}),
-		WithSubHandleFunc(func(topics []*Topic, err error) {
+		WithSubHandleFunc(func(client Client, topics []*Topic, err error) {
 			println("exH.Sub")
 			if err != nil {
 				t.Error(err)
@@ -84,7 +84,7 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 				handler.afterSubSuccess(c)
 			}
 		}),
-		WithUnSubHandleFunc(func(topics []string, err error) {
+		WithUnsubHandleFunc(func(client Client, topics []string, err error) {
 			println("exH.UnSub")
 			if err != nil {
 				t.Error(err)
@@ -96,13 +96,13 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 				handler.afterUnSubSuccess(c)
 			}
 		}),
-		WithNetHandleFunc(func(server string, err error) {
+		WithNetHandleFunc(func(client Client, server string, err error) {
 			if err != nil {
 				t.Error(err)
 				t.FailNow()
 			}
 		}),
-		WithPersistHandleFunc(func(packet Packet, err error) {}),
+		WithPersistHandleFunc(func(client Client, packet Packet, err error) {}),
 	)
 	if err != nil {
 		panic("create baseClient failed")
@@ -111,8 +111,8 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 	return c
 }
 
-func testConnHandler(c *Client, t *testing.T, exH *extraHandler) ConnHandler {
-	return func(server string, code byte, err error) {
+func testConnHandler(c *Client, t *testing.T, exH *extraHandler) ConnHandleFunc {
+	return func(client Client, server string, code byte, err error) {
 		if exH != nil && exH.onConnHandle != nil {
 			println("onConnHandle()")
 			if exH.onConnHandle(*c, server, code, err) {
@@ -210,7 +210,7 @@ func allClients(t *testing.T, handler *extraHandler) map[Client]func() {
 
 func handleTopicAndSub(c Client, t *testing.T) {
 	for i := range testTopics {
-		c.Handle(testTopics[i], func(topic string, maxQos byte, msg []byte) {
+		c.HandleTopic(testTopics[i], func(client Client, topic string, maxQos byte, msg []byte) {
 			if maxQos != testPubMsgs[i].Qos || bytes.Compare(testPubMsgs[i].Payload, msg) != 0 {
 				t.Errorf("fail at sub topic = %v, content unexpected, payload = %v, target payload = %v",
 					topic, string(msg), string(testPubMsgs[i].Payload))

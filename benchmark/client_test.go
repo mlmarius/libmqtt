@@ -50,15 +50,14 @@ func BenchmarkLibmqttClient(b *testing.B) {
 		b.Error(err)
 	}
 
-	client.HandleUnSub(func(topic []string, err error) {
-		if err != nil {
-			b.Error(err)
-		}
-		client.Destroy(true)
-	})
-
 	_ = client.ConnectServer(testServer,
-		lib.WithConnHandleFunc(func(server string, code byte, err error) {
+		lib.WithUnsubHandleFunc(func(client lib.Client, topics []string, err error) {
+			if err != nil {
+				b.Error(err)
+			}
+			client.Destroy(true)
+		}),
+		lib.WithConnHandleFunc(func(client lib.Client, server string, code byte, err error) {
 			if err != nil {
 				b.Error(err)
 			} else if code != lib.CodeSuccess {

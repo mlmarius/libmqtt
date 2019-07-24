@@ -50,7 +50,7 @@ func Decode(version ProtoVersion, r BufferedReader) (Packet, error) {
 			return PingRespPacket, nil
 		case CtrlDisConn:
 			if version == V311 {
-				return &DisConnPacket{}, nil
+				return &DisconnPacket{}, nil
 			} else {
 				// mqtt v5 has props
 				return nil, ErrDecodeBadPacket
@@ -189,7 +189,7 @@ func decodeV311Packet(header byte, body []byte) (Packet, error) {
 		}
 		return pkt, nil
 	case CtrlUnSub:
-		pkt := &UnSubPacket{PacketID: getUint16(body)}
+		pkt := &UnsubPacket{PacketID: getUint16(body)}
 
 		body = body[2:]
 		for len(body) > 0 {
@@ -202,7 +202,7 @@ func decodeV311Packet(header byte, body []byte) (Packet, error) {
 		}
 		return pkt, nil
 	case CtrlUnSubAck:
-		return &UnSubAckPacket{PacketID: getUint16(body)}, nil
+		return &UnsubAckPacket{PacketID: getUint16(body)}, nil
 	}
 
 	return nil, ErrDecodeBadPacket
@@ -434,9 +434,9 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlUnSub:
-		pkt := &UnSubPacket{
+		pkt := &UnsubPacket{
 			PacketID: getUint16(body),
-			Props:    &UnSubProps{},
+			Props:    &UnsubProps{},
 		}
 
 		props, next, err := getRawProps(body[2:])
@@ -456,9 +456,9 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlUnSubAck:
-		pkt := &UnSubAckPacket{
+		pkt := &UnsubAckPacket{
 			PacketID: getUint16(body),
-			Props:    &UnSubAckProps{},
+			Props:    &UnsubAckProps{},
 		}
 
 		props, _, err := getRawProps(body[2:])
@@ -469,9 +469,9 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		pkt.ProtoVersion = V5
 		return pkt, nil
 	case CtrlDisConn:
-		pkt := &DisConnPacket{
+		pkt := &DisconnPacket{
 			Code:  body[0],
-			Props: &DisConnProps{},
+			Props: &DisconnProps{},
 		}
 
 		props, _, err := getRawProps(body[1:])

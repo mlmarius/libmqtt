@@ -105,18 +105,20 @@ func newClient(options []mqtt.Option) {
 		client.Destroy(true)
 	}
 
+	allOpts := append([]mqtt.Option{
+		mqtt.WithPubHandleFunc(pubHandler),
+		mqtt.WithConnHandleFunc(connHandler),
+		mqtt.WithUnsubHandleFunc(unSubHandler),
+		mqtt.WithNetHandleFunc(netHandler),
+		mqtt.WithSubHandleFunc(subHandler),
+	}, options...)
+
 	var err error
-	client, err = mqtt.NewClient(options...)
+	client, err = mqtt.NewClient(allOpts...)
 	if err != nil {
 		println(err.Error())
 		return
 	}
-	client.Connect(connHandler)
-
-	client.HandlePub(pubHandler)
-	client.HandleSub(subHandler)
-	client.HandleUnSub(unSubHandler)
-	client.HandleNet(netHandler)
 }
 
 func connUsage() {

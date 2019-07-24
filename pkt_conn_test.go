@@ -94,10 +94,10 @@ var (
 		},
 	}
 
-	testDisConnMsg = &DisConnPacket{
+	testDisConnMsg = &DisconnPacket{
 		BasePacket: BasePacket{ProtoVersion: testProtoVersion},
 		Code:       CodeUnspecifiedError,
-		Props: &DisConnProps{
+		Props: &DisconnProps{
 			SessionExpiryInterval: 100,
 			Reason:                "MQTT",
 			ServerRef:             "MQTT",

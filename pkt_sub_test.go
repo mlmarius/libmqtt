@@ -28,8 +28,8 @@ var (
 	testSubTopics   []*Topic
 	testSubMsgs     []*SubscribePacket
 	testSubAckMsgs  []*SubAckPacket
-	testUnSubMsgs   []*UnSubPacket
-	testUnSubAckMsg *UnSubAckPacket
+	testUnSubMsgs   []*UnsubPacket
+	testUnSubAckMsg *UnsubAckPacket
 
 	// mqtt 3.1.1
 	testSubMsgBytesV311      [][]byte
@@ -53,7 +53,7 @@ func initTestData_Sub() {
 
 	testSubMsgs = make([]*SubscribePacket, size)
 	testSubAckMsgs = make([]*SubAckPacket, size)
-	testUnSubMsgs = make([]*UnSubPacket, size)
+	testUnSubMsgs = make([]*UnsubPacket, size)
 
 	testSubMsgBytesV311 = make([][]byte, size)
 	testSubAckMsgBytesV311 = make([][]byte, size)
@@ -100,10 +100,10 @@ func initTestData_Sub() {
 		testSubAckMsgBytesV311[i] = subAckBuf.Bytes()
 		testSubAckMsgBytesV5[i] = newV5TestPacketBytes(CtrlSubAck, 0, nil, nil)
 
-		testUnSubMsgs[i] = &UnSubPacket{
+		testUnSubMsgs[i] = &UnsubPacket{
 			PacketID:   msgID,
 			TopicNames: testTopics[:i+1],
-			Props: &UnSubProps{
+			Props: &UnsubProps{
 				UserProps: testConstUserProps,
 			},
 		}
@@ -117,9 +117,9 @@ func initTestData_Sub() {
 	}
 
 	unSunAckBuf := new(bytes.Buffer)
-	testUnSubAckMsg = &UnSubAckPacket{
+	testUnSubAckMsg = &UnsubAckPacket{
 		PacketID: 1,
-		Props: &UnSubAckProps{
+		Props: &UnsubAckProps{
 			Reason:    "MQTT",
 			UserProps: testConstUserProps,
 		},

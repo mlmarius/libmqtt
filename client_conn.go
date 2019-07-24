@@ -87,14 +87,14 @@ func (c *clientConn) logic() {
 						notifyPersistMsg(c.parent.msgCh, p, c.parent.persist.Delete(sendKey(p.PacketID)))
 					}
 				}
-			case *UnSubAckPacket:
-				p := pkt.(*UnSubAckPacket)
+			case *UnsubAckPacket:
+				p := pkt.(*UnsubAckPacket)
 				c.parent.log.v("NET received UnSubAck, id =", p.PacketID)
 
 				if originPkt, ok := c.parent.idGen.getExtra(p.PacketID); ok {
 					switch originPkt.(type) {
-					case *UnSubPacket:
-						originUnSub := originPkt.(*UnSubPacket)
+					case *UnsubPacket:
+						originUnSub := originPkt.(*UnsubPacket)
 						c.parent.log.d("NET unsubscribed topics", originUnSub.TopicNames)
 						notifyUnSubMsg(c.parent.msgCh, originUnSub.TopicNames, nil)
 						c.parent.idGen.free(p.PacketID)
@@ -279,7 +279,7 @@ func (c *clientConn) handleSend() {
 					c.parent.log.d("NET published qos0 packet, topic =", p.TopicName)
 					notifyPubMsg(c.parent.msgCh, p.TopicName, nil)
 				}
-			case *DisConnPacket:
+			case *DisconnPacket:
 				// client exit with disconnect
 				if err := c.connRW.Flush(); err != nil {
 					c.parent.log.e("NET flush error", err)
@@ -311,7 +311,7 @@ func (c *clientConn) handleSend() {
 			case *PubCompPacket:
 				notifyPersistMsg(c.parent.msgCh, pkt,
 					c.parent.persist.Delete(sendKey(pkt.(*PubCompPacket).PacketID)))
-			case *DisConnPacket:
+			case *DisconnPacket:
 				// disconnect to server, no more action
 				if err := c.connRW.Flush(); err != nil {
 					c.parent.log.e("NET flush error", err)

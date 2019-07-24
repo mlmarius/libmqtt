@@ -83,14 +83,14 @@ func WithBufSize(sendBufSize, recvBufSize int) Option {
 	}
 }
 
-func WithConnHandleFunc(handler ConnHandler) Option {
+func WithConnHandleFunc(handler ConnHandleFunc) Option {
 	return func(client *AsyncClient, options *connectOptions) error {
 		options.connHandler = handler
 		return nil
 	}
 }
 
-func WithPubHandleFunc(handler PubHandler) Option {
+func WithPubHandleFunc(handler PubHandleFunc) Option {
 	return func(client *AsyncClient, options *connectOptions) error {
 		if client.pubHandler == nil {
 			client.pubHandler = handler
@@ -99,7 +99,7 @@ func WithPubHandleFunc(handler PubHandler) Option {
 	}
 }
 
-func WithSubHandleFunc(handler SubHandler) Option {
+func WithSubHandleFunc(handler SubHandleFunc) Option {
 	return func(client *AsyncClient, options *connectOptions) error {
 		if client.subHandler == nil {
 			client.subHandler = handler
@@ -108,16 +108,16 @@ func WithSubHandleFunc(handler SubHandler) Option {
 	}
 }
 
-func WithUnSubHandleFunc(handler UnSubHandler) Option {
+func WithUnsubHandleFunc(handler UnsubHandleFunc) Option {
 	return func(client *AsyncClient, options *connectOptions) error {
-		if client.unSubHandler == nil {
-			client.unSubHandler = handler
+		if client.unsubHandler == nil {
+			client.unsubHandler = handler
 		}
 		return nil
 	}
 }
 
-func WithNetHandleFunc(handler NetHandler) Option {
+func WithNetHandleFunc(handler NetHandleFunc) Option {
 	return func(client *AsyncClient, options *connectOptions) error {
 		if client.netHandler == nil {
 			client.netHandler = handler
@@ -126,7 +126,7 @@ func WithNetHandleFunc(handler NetHandler) Option {
 	}
 }
 
-func WithPersistHandleFunc(handler PersistHandler) Option {
+func WithPersistHandleFunc(handler PersistHandleFunc) Option {
 	return func(client *AsyncClient, options *connectOptions) error {
 		if client.persistHandler == nil {
 			client.persistHandler = handler

@@ -572,20 +572,22 @@ func (c *ConnAckProps) setProps(props map[byte][]byte) {
 	}
 }
 
-// DisConnPacket is the final Control Packet sent from the Client to the Server.
+type DisConnPacket = DisconnPacket
+
+// DisconnPacket is the final Control Packet sent from the Client to the Server.
 // It indicates that the Client is disconnecting cleanly.
-type DisConnPacket struct {
+type DisconnPacket struct {
 	BasePacket
 	Code  byte
-	Props *DisConnProps
+	Props *DisconnProps
 }
 
-// Type of DisConnPacket is CtrlDisConn
-func (d *DisConnPacket) Type() CtrlType {
+// Type of DisconnPacket is CtrlDisConn
+func (d *DisconnPacket) Type() CtrlType {
 	return CtrlDisConn
 }
 
-func (d *DisConnPacket) Bytes() []byte {
+func (d *DisconnPacket) Bytes() []byte {
 	if d == nil {
 		return nil
 	}
@@ -595,7 +597,7 @@ func (d *DisConnPacket) Bytes() []byte {
 	return w.Bytes()
 }
 
-func (d *DisConnPacket) WriteTo(w BufferedWriter) error {
+func (d *DisconnPacket) WriteTo(w BufferedWriter) error {
 	if d == nil {
 		return ErrEncodeBadPacket
 	}
@@ -615,8 +617,10 @@ func (d *DisConnPacket) WriteTo(w BufferedWriter) error {
 	}
 }
 
-// DisConnProps properties for DisConnPacket
-type DisConnProps struct {
+type DisConnProps = DisconnPacket
+
+// DisConnProps properties for DisconnPacket
+type DisconnProps struct {
 	// Session Expiry Interval in seconds
 	// If the Session Expiry Interval is absent, the Session Expiry Interval in the CONNECT packet is used
 	//
@@ -633,7 +637,7 @@ type DisConnProps struct {
 	ServerRef string
 }
 
-func (d *DisConnProps) props() []byte {
+func (d *DisconnProps) props() []byte {
 	if d == nil {
 		return nil
 	}
@@ -646,7 +650,7 @@ func (d *DisConnProps) props() []byte {
 	return p.bytes()
 }
 
-func (d *DisConnProps) setProps(props map[byte][]byte) {
+func (d *DisconnProps) setProps(props map[byte][]byte) {
 	if d == nil {
 		return
 	}
