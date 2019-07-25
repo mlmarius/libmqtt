@@ -2,7 +2,7 @@
 
 [![Build Status](https://api.travis-ci.com/goiiot/libmqtt.svg?branch=master)](https://travis-ci.com/goiiot/libmqtt) [![GoDoc](https://godoc.org/github.com/goiiot/libmqtt?status.svg)](https://godoc.org/github.com/goiiot/libmqtt) [![GoReportCard](https://goreportcard.com/badge/goiiot/libmqtt)](https://goreportcard.com/report/github.com/goiiot/libmqtt) [![codecov](https://codecov.io/gh/goiiot/libmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/goiiot/libmqtt)
 
-Feature rich modern MQTT library in pure Go, for `Go`, `C/C++`, `Java`
+Feature rich modern MQTT library in pure Go
 
 ## Table of contents
 
@@ -11,7 +11,6 @@ Feature rich modern MQTT library in pure Go, for `Go`, `C/C++`, `Java`
 - [Topic Routing](#topic-routing)
 - [Session Persist](#session-persist)
 - [Benchmark](#benchmark)
-- [Extensions](#extensions)
 - [LICENSE](#license)
 
 ## Features
@@ -19,162 +18,109 @@ Feature rich modern MQTT library in pure Go, for `Go`, `C/C++`, `Java`
 1. MQTT v3.1.1/v5.0 client support (async only)
 2. High performance and less memory footprint (see [Benchmark](#benchmark))
 3. Customizable topic routing (see [Topic Routing](#topic-routing))
-4. Multiple Builtin session persist methods (see [Session Persist](#session-persist))
-5. [C/C++ lib](./c/), [Java lib](./java/), [Command line client](./cmd/) support
+4. Customizable connectivity method (built-in `tcp`, `tcp-tls`, `websocket`, `websocket-tls`)
+5. Multiple Builtin session persist methods (see [Session Persist](#session-persist))
 6. Idiomatic Go
 
 ## Usage
 
-This package can be used as
+### Prerequisite
 
-- A [Go lib](#as-a-go-lib)
-- A [C/C++ lib](#as-a-cc-lib)
-- A [Java lib](#as-a-java-lib)
-- A [Command line client](#as-a-command-line-client)
-- [MQTT infrastructure](#as-mqtt-infrastructure)
+- Go 1.13+
 
-### As a Go lib
-
-#### Prerequisite
-
-- Go 1.9+
-
-#### Steps
+### Steps
 
 **TL;DR:** You can find a full example at [examples/client.go](./examples/client.go)
 
-1.Go get this project
+1. Go get this project
 
-```bash
-go get github.com/goiiot/libmqtt
-```
+	```bash
+	go get github.com/goiiot/libmqtt
+	```
 
-2.Import this package in your project file
+2. Import this package in your project file
 
-```go
-import "github.com/goiiot/libmqtt"
-```
+	```go
+	import "github.com/goiiot/libmqtt"
+	```
 
-3.Create a custom client
+3. Create a custom client
 
-```go
-// Create a client and enable auto reconnect when connection lost
-// We primarily use `RegexRouter` for client
-client, err := libmqtt.NewClient(
-    // enable keepalive (10s interval) with 20% tolerance
-    libmqtt.WithKeepalive(10, 1.2),
-    // enable auto reconnect and set backoff strategy
-    libmqtt.WithAutoReconnect(true),
-    libmqtt.WithBackoffStrategy(time.Second, 5*time.Second, 1.2),
-    // use RegexRouter for topic routing if not specified
-    // will use TextRouter, which will match full text
-    libmqtt.WithRouter(libmqtt.NewRegexRouter()),
-)
+	```go
+	// Create a client and enable auto reconnect when connection lost
+	// We primarily use `RegexRouter` for client
+	client, err := libmqtt.NewClient(
+		// enable keepalive (10s interval) with 20% tolerance
+		libmqtt.WithKeepalive(10, 1.2),
+		// enable auto reconnect and set backoff strategy
+		libmqtt.WithAutoReconnect(true),
+		libmqtt.WithBackoffStrategy(time.Second, 5*time.Second, 1.2),
+		// use RegexRouter for topic routing if not specified
+		// will use TextRouter, which will match full text
+		libmqtt.WithRouter(libmqtt.NewRegexRouter()),
+	)
 
-if err != nil {
-    // handle client creation error
-    panic("create mqtt client failed")
-}
-```
+	if err != nil {
+		// handle client creation error
+		panic("create mqtt client failed")
+	}
+	```
 
-__Notice__: If you would like to explore all the options available, please refer to [GoDoc#Option](https://godoc.org/github.com/goiiot/libmqtt#Option)
+	__Notice__:
 
-4.Register the handlers and Connect, then you are ready to pub/sub with server
+	- If you would like to explore all the options available, please refer to [GoDoc#Option](https://godoc.org/github.com/goiiot/libmqtt#Option)
+	- All `Option` can be both global option to all connections the client will have and option to some specific connection
 
-<details>
-<summary>Optional, but we recommend to register handlers for pub, sub, unsub, net error and persist error, and you can gain more controllability of the lifecycle of the client</summary>
-<pre><code>
-client.HandlePub(PubHandler) // register handler for pub success/fail (optional, but recommended)
-client.HandleSub(SubHandler) // register handler for sub success/fail (optional, but recommended)
-client.HandleUnSub(UnSubHandler) // register handler for unsub success/fail (optional, but recommended)
-client.HandleNet(NetHandler) // register handler for net error (optional, but recommended)
-client.HandlePersist(PersistHandler) // register handler for persist error (optional, but recommended)
+4. Connect to the mqtt broker, then you are ready to pub/sub with server
 
-// define your topic handlers like a golang http server
-client.Handle("foo", func(topic string, qos libmqtt.QosLevel, msg []byte) {
-    // handle the topic message
-})
+	```go
+	// connect to a mqtt broker
+	client.ConnectServer("test.mosquitto.org:8883",
+		// use trusted certificate
+		libmqtt.WithCustomTLS(nil),
+		// handle conn failure
+		libmqtt.WithConnHandleFunc(func(client libmqtt.Client, server string, code byte, err error) {
+			if err != nil {
+				// failed due to network error
+				panic(err)
+			}
+			
+			if code != libmqtt.CodeSuccess {
+				// rejected by mqtt broker
+				panic(code)
+			}
 
-client.Handle("bar", func(topic string, qos libmqtt.QosLevel, msg []byte) {
-    // handle the topic message
-})
-</code></pre>
-</details>
+			// you are now connected to the broker
+			// start your business logic here
 
-```go
-// connect to server
-client.ConnectServer("test.mosquitto.org:8883", 
-	libmqtt.WithCustomTLS(nil),
-	libmqtt.WithConnHandleFunc(func(server string, code byte, err error) {
-		if err != nil {
-			// failed
-			panic(err)
-		}
-		
-		if code != libmqtt.CodeSuccess {
-			// server rejected or in error
-			panic(code)
-		}
+			// subscribe some topic(s)
+			client.Subscribe([]*libmqtt.Topic{
+				{Name: "foo"},
+				{Name: "bar", Qos: libmqtt.Qos1},
+			}...)
 
-		// success
-		// you are now connected to the `server`
-		// (the `server` is one of your provided `servers` when create the client)
-		// start your business logic here or send a signal to your logic to start
+			// publish some topic message(s)
+			client.Publish([]*libmqtt.PublishPacket{
+				{TopicName: "foo", Payload: []byte("bar"), Qos: libmqtt.Qos0},
+				{TopicName: "bar", Payload: []byte("foo"), Qos: libmqtt.Qos1},
+			}...)
+		}),
+	)
+	```
 
-		// subscribe some topic(s)
-		client.Subscribe([]*libmqtt.Topic{
-			{Name: "foo"},
-			{Name: "bar", Qos: libmqtt.Qos1},
-		}...)
+5. Unsubscribe from topic(s)
 
-		// publish some topic message(s)
-		client.Publish([]*libmqtt.PublishPacket{
-			{TopicName: "foo", Payload: []byte("bar"), Qos: libmqtt.Qos0},
-			{TopicName: "bar", Payload: []byte("foo"), Qos: libmqtt.Qos1},
-		}...)
-	}),
-)
-```
+   ```go
+   client.Unsubscribe("foo", "bar")
+   ```
 
-5.Unsubscribe from topic(s)
+6. Destroy the client when you would like to
 
-```go
-client.UnSubscribe("foo", "bar")
-```
-
-6.Destroy the client when you would like to
-
-```go
-// use true for a immediate disconnect to server
-// use false to send a DisConn packet to server before disconnect
-client.Destroy(true)
-```
-
-### As a C/C++ lib
-
-Please refer to [c - README.md](./c/README.md)
-
-### As a Java lib
-
-Please refer to [java - README.md](./java/README.md)
-
-### As a command line client
-
-Please refer to [cmd/libmqtt - README.md](./cmd/libmqtt/README.md)
-
-### As MQTT infrastructure
-
-This package can also be used as MQTT packet encoder and decoder
-
-```go
-// decode one mqtt 3.1.1 packet from reader
-packet, err := libmqtt.Decode(libmqtt.V311, reader)
-// ...
-
-// encode one mqtt packet to buffered writer
-err := libmqtt.Encode(packet, bufferedWriter)
-// ...
-```
+   ```go
+   // use true for a immediate disconnect to server
+   // use false to send a DisConn packet to server before disconnect
+   client.Destroy(true)
+   ```
 
 ## Topic Routing
 
@@ -201,7 +147,6 @@ Per MQTT Specification, session state should be persisted and be recovered when 
 1. `NonePersist` - no session persist
 2. `memPersist` - in memory session persist
 3. `filePersist` - files session persist (with write barrier)
-4. `redisPersist` - redis session persist (available inside [github.com/goiiot/libmqtt/extension](./extension/) package)
 
 __Note__: Use `RedisPersist` if possible.
 
@@ -223,10 +168,6 @@ The benchmark result listed below was taken on a MacBook Pro 13' (Early 2015, ma
 | BenchmarkPahoClient-4    (eclipse paho) | 100000    | 25072 | 816  | 15        |
 
 You can make the benchmark using source code from [benchmark](./benchmark/)
-
-## Extensions
-
-Helpful extensions for libmqtt (see [extension](./extension/))
 
 ## LICENSE
 

@@ -18,8 +18,6 @@ package libmqtt
 
 import (
 	"context"
-	"crypto/tls"
-	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -45,11 +43,6 @@ func NewClient(options ...Option) (Client, error) {
 
 // AsyncClient is the async mqtt client implementation
 type AsyncClient struct {
-	// Deprecated: use ConnectServer instead (will be removed in v1.0)
-	servers []string
-	// Deprecated: use ConnectServer instead (will be removed in v1.0)
-	secureServers []string
-
 	options          connectOptions      // client wide connection options
 	msgCh            chan *message       // error channel
 	sendCh           chan Packet         // pub channel for sending publish packet to server
@@ -78,9 +71,6 @@ func defaultClient() *AsyncClient {
 	ctx, exitFunc := context.WithCancel(context.Background())
 
 	return &AsyncClient{
-		servers:       make([]string, 0, 1),
-		secureServers: make([]string, 0, 1),
-
 		options: defaultConnectOptions(),
 		msgCh:   make(chan *message, 10),
 		sendCh:  make(chan Packet, 1),
@@ -98,51 +88,11 @@ func defaultClient() *AsyncClient {
 	}
 }
 
-// Handle register subscription message route
-//
-// Deprecated: use HandleTopic instead, will be removed in v1.0
-func (c *AsyncClient) Handle(topic string, h TopicHandler) {
-	if h != nil {
-		c.log.v("CLI registered topic handler, topic =", topic)
-		c.router.Handle(topic, func(client Client, topic string, qos QosLevel, msg []byte) {
-			h(topic, qos, msg)
-		})
-	}
-}
-
 // HandleTopic add a topic routing rule
 func (c *AsyncClient) HandleTopic(topic string, h TopicHandleFunc) {
 	if h != nil {
 		c.log.v("CLI registered topic handler, topic =", topic)
 		c.router.Handle(topic, h)
-	}
-}
-
-// Connect to all designated servers
-//
-// Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
-func (c *AsyncClient) Connect(h ConnHandler) {
-	c.log.v("CLI connect to server, handler =", h)
-
-	connHandler := func(client Client, server string, code byte, err error) {
-		h(server, code, err)
-	}
-
-	for _, s := range c.servers {
-		options := c.options.clone()
-		options.connHandler = connHandler
-
-		c.addWorker(func() { options.connect(c, s, c.options.protoVersion, c.options.firstDelay) })
-	}
-
-	for _, s := range c.secureServers {
-		secureOptions := c.options.clone()
-		secureOptions.connHandler = connHandler
-		secureOptions.tlsConfig = &tls.Config{
-			ServerName: strings.SplitN(s, ":", 1)[0],
-		}
-
-		c.addWorker(func() { secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay) })
 	}
 }
 
@@ -196,12 +146,6 @@ func (c *AsyncClient) Subscribe(topics ...*Topic) {
 	case c.sendCh <- s:
 		return
 	}
-}
-
-// UnSubscribe topic(s)
-// Deprecated: use Unsubscribe instead, will be removed in v1.0
-func (c *AsyncClient) UnSubscribe(topics ...string) {
-	c.Unsubscribe(topics...)
 }
 
 // Unsubscribe topic(s)

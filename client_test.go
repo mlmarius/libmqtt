@@ -94,7 +94,7 @@ func TestClient_UnSubscribe(t *testing.T) {
 			handleTopicAndSub(c, t)
 		},
 		afterSubSuccess: func(c Client) {
-			c.UnSubscribe(testTopics...)
+			c.Unsubscribe(testTopics...)
 		},
 		afterUnSubSuccess: func(c Client) {
 			c.Destroy(true)

@@ -71,7 +71,7 @@ func BenchmarkLibmqttClient(b *testing.B) {
 					Payload:   testTopicMsg,
 				})
 			}
-			client.UnSubscribe(testTopic)
+			client.Unsubscribe(testTopic)
 		}),
 	)
 

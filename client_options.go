@@ -33,39 +33,6 @@ var (
 // Option is client option for connection options
 type Option func(*AsyncClient, *connectOptions) error
 
-// WithSecureServer use server certificate for verification
-// won't apply `WithTLS`, `WithCustomTLS`, `WithTLSReader` options
-// when connecting to these servers
-//
-// Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
-func WithSecureServer(servers ...string) Option {
-	return func(c *AsyncClient, options *connectOptions) error {
-		if c == nil {
-			return errors.New("global option can not be applied to ConnectServer")
-		}
-
-		c.secureServers = append(c.secureServers, servers...)
-		return nil
-	}
-}
-
-// WithServer set client servers
-// addresses should be in form of `ip:port` or `domain.name:port`,
-// only TCP connection supported for now
-//
-// Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
-func WithServer(servers ...string) Option {
-	return func(c *AsyncClient, options *connectOptions) error {
-		c.servers = append(c.servers, servers...)
-		return nil
-	}
-}
-
-// WithBuf is the alias of WithBufSize
-//
-// Deprecated: use WithBufSize instead (will be removed in v1.0)
-var WithBuf = WithBufSize
-
 // WithBufSize designate the channel size of send and recv
 func WithBufSize(sendBufSize, recvBufSize int) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
