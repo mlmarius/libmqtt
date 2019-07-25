@@ -25,6 +25,26 @@ import (
 
 // conn test data
 var (
+	testConnProps = &ConnProps{
+		SessionExpiryInterval: 100,
+		MaxRecv:               100,
+		MaxPacketSize:         100,
+		MaxTopicAlias:         100,
+		ReqRespInfo:           True,
+		ReqProblemInfo:        True,
+		UserProps:             testConstUserProps,
+		AuthMethod:            "MQTT",
+		AuthData:              []byte("MQTT"),
+	}
+	testConnPropsBytes = []byte{
+		propKeySessionExpiryInterval, 100, 100, 100, 100,
+		propKeyMaxRecv, 100, 100,
+		propKeyMaxPacketSize, 100, 100, 100, 100,
+		propKeyMaxTopicAlias, 100, 100,
+		propKeyReqRespInfo, 1,
+		propKeyReqProblemInfo, 1,
+		propKeyUserProps, 0, 2, 'M', 'Q', 0, 2, 'T', 'T',
+	}
 	testConnWillMsg = &ConnPacket{
 		BasePacket:   BasePacket{ProtoVersion: testProtoVersion},
 		Username:     testUsername,
@@ -37,6 +57,7 @@ var (
 		WillTopic:    testWillTopic,
 		WillMessage:  testWillMessage,
 		Keepalive:    testKeepalive,
+		Props:        testConnProps,
 	}
 
 	testConnMsg = &ConnPacket{
@@ -46,14 +67,49 @@ var (
 		ClientID:     testClientID,
 		CleanSession: testCleanSession,
 		Keepalive:    testKeepalive,
+		Props:        testConnProps,
 	}
 
 	testConnAckMsg = &ConnAckPacket{
-		Present: testConnackPresent,
-		Code:    testConnackCode,
+		Present: testConnAckPresent,
+		Code:    testConnAckCode,
+		Props: &ConnAckProps{
+			SessionExpiryInterval: 100,
+			MaxRecv:               100,
+			MaxQos:                Qos2,
+			RetainAvail:           True,
+			MaxPacketSize:         100,
+			AssignedClientID:      "MQTT",
+			MaxTopicAlias:         100,
+			Reason:                "MQTT",
+			UserProps:             testConstUserProps,
+			WildcardSubAvail:      True,
+			SubIDAvail:            True,
+			SharedSubAvail:        True,
+			ServerKeepalive:       100,
+			RespInfo:              "MQTT",
+			ServerRef:             "MQTT",
+			AuthMethod:            "MQTT",
+			AuthData:              []byte("MQTT"),
+		},
 	}
 
-	testDisConnMsg = &DisConnPacket{}
+	testDisConnMsg = &DisconnPacket{
+		BasePacket: BasePacket{ProtoVersion: testProtoVersion},
+		Code:       CodeUnspecifiedError,
+		Props: &DisconnProps{
+			SessionExpiryInterval: 100,
+			Reason:                "MQTT",
+			ServerRef:             "MQTT",
+			UserProps:             UserProps{"MQ": []string{"TT"}},
+		},
+	}
+	testDisConnPropsBytes = []byte{
+		propKeySessionExpiryInterval, 100, 100, 100, 100,
+		propKeyReasonString, 0, 4, 'M', 'Q', 'T', 'T',
+		propKeyServerRef, 0, 4, 'M', 'Q', 'T', 'T',
+		propKeyUserProps, 0, 2, 'M', 'Q', 0, 2, 'T', 'T',
+	}
 
 	// mqtt 3.1.1
 	testConnWillMsgBytesV311 []byte
@@ -69,7 +125,6 @@ var (
 )
 
 func initTestData_Conn() {
-	// conn (with will)
 	connWillPkt := std.NewControlPacket(std.Connect).(*std.ConnectPacket)
 	connWillPkt.Username = testUsername
 	connWillPkt.UsernameFlag = true
@@ -85,11 +140,11 @@ func initTestData_Conn() {
 	connWillPkt.WillTopic = testWillTopic
 	connWillPkt.WillMessage = testWillMessage
 	connWillPkt.Keepalive = testKeepalive
-	connWillBuf := &bytes.Buffer{}
-	connWillPkt.Write(connWillBuf)
+	connWillBuf := new(bytes.Buffer)
+	_ = connWillPkt.Write(connWillBuf)
 	testConnWillMsgBytesV311 = connWillBuf.Bytes()
+	testConnWillMsgBytesV5 = newV5TestPacketBytes(CtrlConn, 0, nil, nil)
 
-	// conn (no will)
 	connPkt := std.NewControlPacket(std.Connect).(*std.ConnectPacket)
 	connPkt.Username = testUsername
 	connPkt.UsernameFlag = true
@@ -100,37 +155,37 @@ func initTestData_Conn() {
 	connPkt.ClientIdentifier = testClientID
 	connPkt.CleanSession = testCleanSession
 	connPkt.Keepalive = testKeepalive
-	connBuf := &bytes.Buffer{}
-	connPkt.Write(connBuf)
+	connBuf := new(bytes.Buffer)
+	_ = connPkt.Write(connBuf)
 	testConnMsgBytesV311 = connBuf.Bytes()
+	testConnMsgBytesV5 = newV5TestPacketBytes(CtrlConn, 0, nil, nil)
 
-	// connack
-	connackPkt := std.NewControlPacket(std.Connack).(*std.ConnackPacket)
-	connackPkt.SessionPresent = testConnackPresent
-	connackPkt.ReturnCode = testConnackCode
-	connAckBuf := &bytes.Buffer{}
-	connackPkt.Write(connAckBuf)
+	connAckPkt := std.NewControlPacket(std.Connack).(*std.ConnackPacket)
+	connAckPkt.SessionPresent = testConnAckPresent
+	connAckPkt.ReturnCode = testConnAckCode
+	connAckBuf := new(bytes.Buffer)
+	_ = connAckPkt.Write(connAckBuf)
 	testConnAckMsgBytesV311 = connAckBuf.Bytes()
+	testConnAckMsgBytesV5 = newV5TestPacketBytes(CtrlConnAck, 0, nil, nil)
 
-	// disconn
 	disConnPkt := std.NewControlPacket(std.Disconnect).(*std.DisconnectPacket)
-	disconnBuf := &bytes.Buffer{}
-	disConnPkt.Write(disconnBuf)
-	testDisConnMsgBytesV311 = disconnBuf.Bytes()
+	disConnBuf := new(bytes.Buffer)
+	_ = disConnPkt.Write(disConnBuf)
+	testDisConnMsgBytesV311 = disConnBuf.Bytes()
+	testDisConnMsgBytesV5 = newV5TestPacketBytes(CtrlDisConn, 0,
+		append([]byte{CodeUnspecifiedError}, testDisConnPropsBytes...), nil)
 }
 
 func TestConnPacket_Bytes(t *testing.T) {
-	testConnMsg.ProtoVersion = V311
-	testPacketBytes(testConnMsg, testConnMsgBytesV311, t)
-	// testConnMsg.ProtoVersion = V5
-	// testV5Bytes(testConnMsg, testConnMsgBytesV5, t)
+	testPacketBytes(V311, testConnMsg, testConnMsgBytesV311, t)
+	t.Skip("v5")
+	testPacketBytes(V5, testConnMsg, testConnMsgBytesV5, t)
 }
 
 func TestConnWillPacket_Bytes(t *testing.T) {
-	testConnWillMsg.ProtoVersion = V311
-	testPacketBytes(testConnWillMsg, testConnWillMsgBytesV311, t)
-	// testConnWillMsg.ProtoVersion = V5
-	// testV5Bytes(testConnWillMsg, testConnWillMsgBytesV5, t)
+	testPacketBytes(V311, testConnWillMsg, testConnWillMsgBytesV311, t)
+	t.Skip("v5")
+	testPacketBytes(V5, testConnWillMsg, testConnWillMsgBytesV5, t)
 }
 
 func TestConnProps_Props(t *testing.T) {
@@ -142,10 +197,9 @@ func TestConnProps_SetProps(t *testing.T) {
 }
 
 func TestConnAckPacket_Bytes(t *testing.T) {
-	testConnAckMsg.ProtoVersion = V311
-	testPacketBytes(testConnAckMsg, testConnAckMsgBytesV311, t)
-	// testConnAckMsg.ProtoVersion = V5
-	// testV5Bytes(testConnAckMsg, testConnAckMsgBytesV5, t)
+	testPacketBytes(V311, testConnAckMsg, testConnAckMsgBytesV311, t)
+	t.Skip("v5")
+	testPacketBytes(V5, testConnAckMsg, testConnAckMsgBytesV5, t)
 }
 
 func TestConnAckProps_Props(t *testing.T) {
@@ -157,10 +211,9 @@ func TestConnAckProps_SetProps(t *testing.T) {
 }
 
 func TestDisConnPacket_Bytes(t *testing.T) {
-	testDisConnMsg.ProtoVersion = V311
-	testPacketBytes(testDisConnMsg, testDisConnMsgBytesV311, t)
-	// testDisConnMsg.ProtoVersion = V5
-	// testV5Bytes(testDisConnMsg, testDisConnMsgBytesV5, t)
+	testPacketBytes(V311, testDisConnMsg, testDisConnMsgBytesV311, t)
+	t.Skip("v5")
+	testPacketBytes(V5, testDisConnMsg, testDisConnMsgBytesV5, t)
 }
 
 func TestDisConnProps_Props(t *testing.T) {

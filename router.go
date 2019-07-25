@@ -26,14 +26,14 @@ type TopicRouter interface {
 	// Name is the name of router
 	Name() string
 	// Handle defines how to register topic with handler
-	Handle(topic string, h TopicHandler)
+	Handle(topic string, h TopicHandleFunc)
 	// Dispatch defines the action to dispatch published packet
-	Dispatch(p *PublishPacket)
+	Dispatch(client Client, p *PublishPacket)
 }
 
 // NewStandardRouter will create a standard mqtt router
 func NewStandardRouter() *StandardRouter {
-	return &StandardRouter{m: &sync.Map{}}
+	return &StandardRouter{m: new(sync.Map)}
 }
 
 // StandardRouter implements standard MQTT routing behaviour
@@ -50,18 +50,18 @@ func (s *StandardRouter) Name() string {
 }
 
 // Handle defines how to register topic with handler
-func (s *StandardRouter) Handle(topic string, h TopicHandler) {
+func (s *StandardRouter) Handle(topic string, h TopicHandleFunc) {
 
 }
 
 // Dispatch defines the action to dispatch published packet
-func (s *StandardRouter) Dispatch(p *PublishPacket) {
+func (s *StandardRouter) Dispatch(client Client, p *PublishPacket) {
 
 }
 
 // NewRegexRouter will create a regex router
 func NewRegexRouter() *RegexRouter {
-	return &RegexRouter{m: &sync.Map{}}
+	return &RegexRouter{m: new(sync.Map)}
 }
 
 // RegexRouter use regex to match topic messages
@@ -79,7 +79,7 @@ func (r *RegexRouter) Name() string {
 }
 
 // Handle will register the topic with handler
-func (r *RegexRouter) Handle(topicRegex string, h TopicHandler) {
+func (r *RegexRouter) Handle(topicRegex string, h TopicHandleFunc) {
 	if r == nil || r.m == nil {
 		return
 	}
@@ -87,15 +87,15 @@ func (r *RegexRouter) Handle(topicRegex string, h TopicHandler) {
 }
 
 // Dispatch the received packet
-func (r *RegexRouter) Dispatch(p *PublishPacket) {
+func (r *RegexRouter) Dispatch(client Client, p *PublishPacket) {
 	if r == nil || r.m == nil {
 		return
 	}
 
 	r.m.Range(func(k, v interface{}) bool {
 		if reg := k.(*regexp.Regexp); reg.MatchString(p.TopicName) {
-			handler := v.(TopicHandler)
-			handler(p.TopicName, p.Qos, p.Payload)
+			handler := v.(TopicHandleFunc)
+			handler(client, p.TopicName, p.Qos, p.Payload)
 		}
 		return true
 	})
@@ -103,7 +103,7 @@ func (r *RegexRouter) Dispatch(p *PublishPacket) {
 
 // NewTextRouter will create a text based router
 func NewTextRouter() *TextRouter {
-	return &TextRouter{m: &sync.Map{}}
+	return &TextRouter{m: new(sync.Map)}
 }
 
 // TextRouter uses plain string comparison to dispatch topic message
@@ -122,7 +122,7 @@ func (r *TextRouter) Name() string {
 }
 
 // Handle will register the topic with handler
-func (r *TextRouter) Handle(topic string, h TopicHandler) {
+func (r *TextRouter) Handle(topic string, h TopicHandleFunc) {
 	if r == nil || r.m == nil {
 		return
 	}
@@ -131,13 +131,13 @@ func (r *TextRouter) Handle(topic string, h TopicHandler) {
 }
 
 // Dispatch the received packet
-func (r *TextRouter) Dispatch(p *PublishPacket) {
+func (r *TextRouter) Dispatch(client Client, p *PublishPacket) {
 	if r == nil || r.m == nil {
 		return
 	}
 
 	if h, ok := r.m.Load(p.TopicName); ok {
-		handler := h.(TopicHandler)
-		handler(p.TopicName, p.Qos, p.Payload)
+		handler := h.(TopicHandleFunc)
+		handler(client, p.TopicName, p.Qos, p.Payload)
 	}
 }

@@ -107,7 +107,7 @@ func (n *nonePersist) Destroy() error                        { return nil }
 // if no strategy provided (nil), then the default strategy will be used
 func NewMemPersist(strategy *PersistStrategy) PersistMethod {
 	p := &memPersist{
-		data: &sync.Map{},
+		data: new(sync.Map),
 		n:    0,
 	}
 
@@ -199,7 +199,7 @@ func (m *memPersist) Destroy() error {
 		return nil
 	}
 
-	m.data = &sync.Map{}
+	m.data = new(sync.Map)
 	return nil
 }
 
@@ -213,8 +213,8 @@ const (
 func NewFilePersist(dirPath string, strategy *PersistStrategy) PersistMethod {
 	p := &filePersist{
 		dirPath:  dirPath,
-		inMemBuf: &sync.Map{},
-		bytesBuf: &bytes.Buffer{},
+		inMemBuf: new(sync.Map),
+		bytesBuf: new(bytes.Buffer),
 	}
 
 	if strategy != nil {
@@ -224,7 +224,7 @@ func NewFilePersist(dirPath string, strategy *PersistStrategy) PersistMethod {
 	}
 
 	// init file packet size
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return filepath.SkipDir
 		}
@@ -275,6 +275,7 @@ func (m *filePersist) Store(key string, p Packet) error {
 			if atomic.LoadUint32(&m.inMemSize) == 0 {
 				// schedule a file save action according to the strategy
 				defer func() {
+					// TODO: make this goroutine contained
 					go m.worker()
 				}()
 			}
@@ -309,7 +310,7 @@ func (m *filePersist) Range(ranger func(key string, p Packet) bool) {
 		return
 	}
 
-	filepath.Walk(m.dirPath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(m.dirPath, func(path string, info os.FileInfo, err error) error {
 		// error happened or is dir
 		if err != nil || info.IsDir() {
 			return filepath.SkipDir
@@ -399,7 +400,7 @@ func (m *filePersist) worker() {
 			return true
 		}
 
-		m.store(k, p)
+		_ = m.store(k, p)
 		persistedKeys = append(persistedKeys, k)
 		return true
 	})

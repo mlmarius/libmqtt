@@ -40,7 +40,7 @@ func TestTextRouter_Dispatch(t *testing.T) {
 
 	for i := 0; i < topicCount; i++ {
 		newTopic := addTopic()
-		r.Handle(newTopic, func(topic string, code byte, msg []byte) {
+		r.Handle(newTopic, func(client Client, topic string, code byte, msg []byte) {
 			if topic != newTopic {
 				t.Error("fail at topic =", topic, ", target topic =", newTopic)
 			}
@@ -50,7 +50,7 @@ func TestTextRouter_Dispatch(t *testing.T) {
 
 	for key := range testTopics {
 		k := key
-		r.Dispatch(&PublishPacket{TopicName: k})
+		r.Dispatch(nil, &PublishPacket{TopicName: k})
 	}
 
 	if count != topicCount {
@@ -62,17 +62,17 @@ func TestRegexRouter_Dispatch(t *testing.T) {
 	r := NewRegexRouter()
 	allCount, prefixCount, numCount := 0, 0, 0
 
-	r.Handle(".*", func(topic string, code byte, msg []byte) {
+	r.Handle(".*", func(client Client, topic string, code byte, msg []byte) {
 		// should match all topics
 		allCount++
 	})
 
-	r.Handle(`^(\/test)`, func(topic string, code byte, msg []byte) {
+	r.Handle(`^(\/test)`, func(client Client, topic string, code byte, msg []byte) {
 		// should match topics with `/test` prefix
 		prefixCount++
 	})
 
-	r.Handle("\\d+", func(topic string, code byte, msg []byte) {
+	r.Handle("\\d+", func(client Client, topic string, code byte, msg []byte) {
 		// should match topics with number(s)
 		numCount++
 	})
@@ -85,7 +85,7 @@ func TestRegexRouter_Dispatch(t *testing.T) {
 	}
 
 	for _, v := range pkts {
-		r.Dispatch(v)
+		r.Dispatch(nil, v)
 	}
 
 	if allCount != len(pkts) {

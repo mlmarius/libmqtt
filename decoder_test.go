@@ -22,7 +22,7 @@ import (
 )
 
 func TestDecodeRemainLength(t *testing.T) {
-	buffer := &bytes.Buffer{}
+	buffer := new(bytes.Buffer)
 	buffer.Write([]byte{0x04})
 	length, _ := getRemainLength(buffer)
 	if length != 0x04 {
@@ -34,7 +34,7 @@ func TestDecodeRemainLength(t *testing.T) {
 func TestDecodeOnePacket(t *testing.T) {
 	// MQTT packet should work
 	targetBytes := testConnWillMsgBytesV311
-	buf := &bytes.Buffer{}
+	buf := new(bytes.Buffer)
 
 	if _, err := buf.Write(targetBytes); err != nil {
 		t.Error(err)
@@ -46,7 +46,7 @@ func TestDecodeOnePacket(t *testing.T) {
 		buf.Reset()
 		switch pkt.(type) {
 		case *ConnPacket:
-			Encode(pkt, buf)
+			_ = Encode(pkt, buf)
 			pktBytes := buf.Bytes()
 			if bytes.Compare(pktBytes, targetBytes) != 0 {
 				t.Error(pktBytes)
@@ -92,7 +92,7 @@ func TestDecodeOnePacket(t *testing.T) {
 
 func BenchmarkDecodeOnePacket(b *testing.B) {
 	b.StopTimer()
-	buf := &bytes.Buffer{}
+	buf := new(bytes.Buffer)
 	for i := 0; i < b.N; i++ {
 		buf.Write(testConnWillMsgBytesV311)
 	}

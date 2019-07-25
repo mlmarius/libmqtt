@@ -19,9 +19,7 @@ package libmqtt
 import "bytes"
 
 var (
-	// PingReqPacket is the final instance of pingReqPacket
-	PingReqPacket = &pingReqPacket{}
-	// PingRespPacket is the final instance of pingRespPacket
+	PingReqPacket  = &pingReqPacket{}
 	PingRespPacket = &pingRespPacket{}
 )
 
@@ -46,8 +44,8 @@ func (p *pingReqPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -56,9 +54,9 @@ func (p *pingReqPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311, V5:
-		w.WriteByte(byte(CtrlPingReq << 4))
+	switch p.Version() {
+	case V311, V5:
+		_ = w.WriteByte(CtrlPingReq << 4)
 		return w.WriteByte(0x00)
 	default:
 		return ErrUnsupportedVersion
@@ -80,8 +78,8 @@ func (p *pingRespPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -90,9 +88,9 @@ func (p *pingRespPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311, V5:
-		w.WriteByte(byte(CtrlPingResp << 4))
+	switch p.Version() {
+	case V311, V5:
+		_ = w.WriteByte(CtrlPingResp << 4)
 		return w.WriteByte(0x00)
 	default:
 		return ErrUnsupportedVersion

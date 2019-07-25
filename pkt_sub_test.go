@@ -28,8 +28,8 @@ var (
 	testSubTopics   []*Topic
 	testSubMsgs     []*SubscribePacket
 	testSubAckMsgs  []*SubAckPacket
-	testUnSubMsgs   []*UnSubPacket
-	testUnSubAckMsg *UnSubAckPacket
+	testUnSubMsgs   []*UnsubPacket
+	testUnSubAckMsg *UnsubAckPacket
 
 	// mqtt 3.1.1
 	testSubMsgBytesV311      [][]byte
@@ -45,94 +45,116 @@ var (
 )
 
 func initTestData_Sub() {
-	testSubTopics = make([]*Topic, len(testTopics))
+	size := len(testTopics)
+	testSubTopics = make([]*Topic, size)
 	for i := range testSubTopics {
 		testSubTopics[i] = &Topic{Name: testTopics[i], Qos: testTopicQos[i]}
 	}
 
-	testSubMsgs = make([]*SubscribePacket, len(testTopics))
-	testSubMsgBytesV311 = make([][]byte, len(testTopics))
-	testSubAckMsgs = make([]*SubAckPacket, len(testTopics))
-	testSubAckMsgBytesV311 = make([][]byte, len(testTopics))
-	testUnSubMsgs = make([]*UnSubPacket, len(testTopics))
-	testUnSubMsgBytesV311 = make([][]byte, len(testTopics))
+	testSubMsgs = make([]*SubscribePacket, size)
+	testSubAckMsgs = make([]*SubAckPacket, size)
+	testUnSubMsgs = make([]*UnsubPacket, size)
+
+	testSubMsgBytesV311 = make([][]byte, size)
+	testSubAckMsgBytesV311 = make([][]byte, size)
+	testUnSubMsgBytesV311 = make([][]byte, size)
+
+	testSubMsgBytesV5 = make([][]byte, size)
+	testSubAckMsgBytesV5 = make([][]byte, size)
+	testUnSubMsgBytesV5 = make([][]byte, size)
 
 	for i := range testTopics {
+		msgID := uint16(i + 1)
 		testSubMsgs[i] = &SubscribePacket{
 			Topics:   testSubTopics[:i+1],
-			PacketID: testPacketID,
+			PacketID: msgID,
+			Props: &SubscribeProps{
+				SubID:     100,
+				UserProps: testConstUserProps,
+			},
 		}
 
 		subPkt := std.NewControlPacket(std.Subscribe).(*std.SubscribePacket)
 		subPkt.Topics = testTopics[:i+1]
 		subPkt.Qoss = testTopicQos[:i+1]
-		subPkt.MessageID = testPacketID
+		subPkt.MessageID = msgID
 
-		subBuf := &bytes.Buffer{}
-		subPkt.Write(subBuf)
+		subBuf := new(bytes.Buffer)
+		_ = subPkt.Write(subBuf)
 		testSubMsgBytesV311[i] = subBuf.Bytes()
+		testSubMsgBytesV5[i] = newV5TestPacketBytes(CtrlSubscribe, 0, nil, nil)
 
 		testSubAckMsgs[i] = &SubAckPacket{
-			PacketID: testPacketID,
+			PacketID: msgID,
 			Codes:    testSubAckCodes[:i+1],
+			Props: &SubAckProps{
+				Reason:    "MQTT",
+				UserProps: testConstUserProps,
+			},
 		}
 		subAckPkt := std.NewControlPacket(std.Suback).(*std.SubackPacket)
-		subAckPkt.MessageID = testPacketID
+		subAckPkt.MessageID = msgID
 		subAckPkt.ReturnCodes = testSubAckCodes[:i+1]
-		subAckBuf := &bytes.Buffer{}
-		subAckPkt.Write(subAckBuf)
+		subAckBuf := new(bytes.Buffer)
+		_ = subAckPkt.Write(subAckBuf)
 		testSubAckMsgBytesV311[i] = subAckBuf.Bytes()
+		testSubAckMsgBytesV5[i] = newV5TestPacketBytes(CtrlSubAck, 0, nil, nil)
 
-		testUnSubMsgs[i] = &UnSubPacket{
-			PacketID:   testPacketID,
+		testUnSubMsgs[i] = &UnsubPacket{
+			PacketID:   msgID,
 			TopicNames: testTopics[:i+1],
+			Props: &UnsubProps{
+				UserProps: testConstUserProps,
+			},
 		}
 		unsubPkt := std.NewControlPacket(std.Unsubscribe).(*std.UnsubscribePacket)
 		unsubPkt.Topics = testTopics[:i+1]
-		unsubPkt.MessageID = testPacketID
-		unSubBuf := &bytes.Buffer{}
-		unsubPkt.Write(unSubBuf)
+		unsubPkt.MessageID = msgID
+		unSubBuf := new(bytes.Buffer)
+		_ = unsubPkt.Write(unSubBuf)
 		testUnSubMsgBytesV311[i] = unSubBuf.Bytes()
+		testUnSubMsgBytesV5[i] = newV5TestPacketBytes(CtrlUnSub, 0, nil, nil)
 	}
 
-	unSunAckBuf := &bytes.Buffer{}
-	testUnSubAckMsg = &UnSubAckPacket{PacketID: testPacketID}
+	unSunAckBuf := new(bytes.Buffer)
+	testUnSubAckMsg = &UnsubAckPacket{
+		PacketID: 1,
+		Props: &UnsubAckProps{
+			Reason:    "MQTT",
+			UserProps: testConstUserProps,
+		},
+	}
 	unsubAckPkt := std.NewControlPacket(std.Unsuback).(*std.UnsubackPacket)
-	unsubAckPkt.MessageID = testPacketID
-	unsubAckPkt.Write(unSunAckBuf)
+	unsubAckPkt.MessageID = 1
+	_ = unsubAckPkt.Write(unSunAckBuf)
 	testUnSubAckMsgBytesV311 = unSunAckBuf.Bytes()
+	testUnSubAckMsgBytesV5 = newV5TestPacketBytes(CtrlUnSubAck, 0, nil, nil)
 }
 
 func TestSubscribePacket_Bytes(t *testing.T) {
 	for i, p := range testSubMsgs {
-		p.ProtoVersion = V311
-		testPacketBytes(p, testSubMsgBytesV311[i], t)
-		// p.ProtoVersion = V5
-		// testPacketBytes(p, testSubMsgBytesV5[i], t)
+		testPacketBytes(V311, p, testSubMsgBytesV311[i], t)
+		//testPacketBytes(V5, p, testSubMsgBytesV5[i], t)
 	}
 }
 
 func TestSubAckPacket_Bytes(t *testing.T) {
 	for i, p := range testSubAckMsgs {
-		p.ProtoVersion = V311
-		testPacketBytes(p, testSubAckMsgBytesV311[i], t)
-		// p.ProtoVersion = V5
-		// testPacketBytes(p, testSubAckMsgBytesV5[i], t)
+		testPacketBytes(V311, p, testSubAckMsgBytesV311[i], t)
+		//testPacketBytes(V5, p, testSubAckMsgBytesV5[i], t)
 	}
 }
 
 func TestUnSubPacket_Bytes(t *testing.T) {
 	for i, p := range testUnSubMsgs {
-		p.ProtoVersion = V311
-		testPacketBytes(p, testUnSubMsgBytesV311[i], t)
-		// p.ProtoVersion = V5
-		// testPacketBytes(p, testUnSubMsgBytesV5[i], t)
+		testPacketBytes(V311, p, testUnSubMsgBytesV311[i], t)
+		//testPacketBytes(V5, p, testUnSubMsgBytesV5[i], t)
 	}
 }
 
 func TestUnSubAckPacket_Bytes(t *testing.T) {
-	testUnSubAckMsg.ProtoVersion = V311
-	testPacketBytes(testUnSubAckMsg, testUnSubAckMsgBytesV311, t)
-	// testUnSubAckMsg.ProtoVersion = V5
-	// testPacketBytes(testUnSubAckMsg, testUnSubAckMsgBytesV5, t)
+	testPacketBytes(V311, testUnSubAckMsg, testUnSubAckMsgBytesV311, t)
+
+	t.Skip("v5")
+	testPacketBytes(V5, testUnSubAckMsg, testUnSubAckMsgBytesV5, t)
 }

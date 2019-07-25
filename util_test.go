@@ -112,9 +112,9 @@ func TestGetRawProps(t *testing.T) {
 
 	payload := []byte{0, 0, 0, 0, 0, 0, 0, 0}
 
-	buf := &bytes.Buffer{}
+	buf := new(bytes.Buffer)
 	// prop length
-	writeVarInt(len(props), buf)
+	_ = writeVarInt(len(props), buf)
 	buf.Write(props)
 	buf.Write(payload)
 

@@ -41,8 +41,8 @@ func (p *PublishPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -51,29 +51,12 @@ func (p *PublishPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
-		w.WriteByte(byte(CtrlPublish<<4) | boolToByte(p.IsDup)<<3 | boolToByte(p.IsRetain) | p.Qos<<1)
-		payload := p.payload()
-		writeVarInt(len(payload), w)
-		_, err := w.Write(payload)
-		return err
+	first := CtrlPublish<<4 | boolToByte(p.IsDup)<<3 | boolToByte(p.IsRetain) | p.Qos<<1
+	switch p.Version() {
+	case V311:
+		return p.write(w, first, nil, p.payload())
 	case V5:
-		w.WriteByte(byte(CtrlPublish<<4) | boolToByte(p.IsDup)<<3 | boolToByte(p.IsRetain) | p.Qos<<1)
-
-		props := p.Props.props()
-		propLen := len(props)
-		payload := p.payload()
-
-		if err := writeVarInt(len(payload)+propLen, w); err != nil {
-			return err
-		}
-
-		writeVarInt(propLen, w)
-		w.Write(props)
-
-		_, err := w.Write(payload)
-		return err
+		return p.writeV5(w, first, nil, p.Props.props(), p.payload())
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -132,52 +115,18 @@ func (p *PublishProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 2)
-	result[0] = propKeyPayloadFormatIndicator
-	result[1] = p.PayloadFormat
-
-	if p.MessageExpiryInterval != 0 {
-		data := []byte{propKeyMessageExpiryInterval, 0, 0, 0, 0}
-		putUint32(data[1:], p.MessageExpiryInterval)
-		result = append(result, data...)
+	propSet := propertySet{}
+	propSet.set(propKeyPayloadFormatIndicator, p.PayloadFormat)
+	propSet.set(propKeyMessageExpiryInterval, p.MessageExpiryInterval)
+	propSet.set(propKeyTopicAlias, p.TopicAlias)
+	propSet.set(propKeyRespTopic, p.RespTopic)
+	propSet.set(propKeyCorrelationData, p.CorrelationData)
+	propSet.set(propKeyUserProps, p.UserProps)
+	for _, v := range p.SubIDs {
+		propSet.add(propKeySubID, v)
 	}
-
-	if p.TopicAlias != 0 {
-		data := []byte{propKeyTopicAlias, 0, 0, 0, 0}
-		putUint16(data[1:], p.TopicAlias)
-		result = append(result, data...)
-	}
-
-	if p.RespTopic != "" {
-		result = append(result, propKeyRespTopic)
-		result = append(result, encodeStringWithLen(p.RespTopic)...)
-	}
-
-	if p.CorrelationData != nil {
-		result = append(result, propKeyCorrelationData)
-		result = append(result, encodeBytesWithLen(p.CorrelationData)...)
-	}
-
-	if p.UserProps != nil {
-		p.UserProps.encodeTo(result)
-	}
-
-	if p.SubIDs != nil {
-		buf := &bytes.Buffer{}
-		for _, v := range p.SubIDs {
-			result = append(result, propKeySubID)
-			writeVarInt(v, buf)
-			result = append(result, buf.Bytes()...)
-			buf.Reset()
-		}
-	}
-
-	if p.ContentType != "" {
-		result = append(result, propKeyContentType)
-		result = append(result, encodeStringWithLen(p.ContentType)...)
-	}
-
-	return result
+	propSet.set(propKeyContentType, p.ContentType)
+	return propSet.bytes()
 }
 
 func (p *PublishProps) setProps(props map[byte][]byte) {
@@ -242,8 +191,8 @@ func (p *PubAckPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -252,28 +201,12 @@ func (p *PubAckPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
-		w.WriteByte(byte(CtrlPubAck << 4))
-		w.WriteByte(2)
-		w.WriteByte(byte(p.PacketID >> 8))
-		return w.WriteByte(byte(p.PacketID))
+	varHeader := []byte{byte(p.PacketID >> 8), byte(p.PacketID)}
+	switch p.Version() {
+	case V311:
+		return p.write(w, CtrlPubAck<<4, varHeader, nil)
 	case V5:
-		w.WriteByte(byte(CtrlPubAck << 4))
-
-		props := p.Props.props()
-		propLen := len(props)
-		if err := writeVarInt(propLen+2, w); err != nil {
-			return err
-		}
-
-		w.WriteByte(byte(p.PacketID >> 8))
-		w.WriteByte(byte(p.PacketID))
-
-		writeVarInt(propLen, w)
-		_, err := w.Write(props)
-
-		return err
+		return p.writeV5(w, CtrlPubAck<<4, varHeader, p.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -293,16 +226,10 @@ func (p *PubAckProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
-	if p.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(p.Reason)...)
-	}
-
-	if p.UserProps != nil {
-		p.UserProps.encodeTo(result)
-	}
-	return result
+	propSet := propertySet{}
+	propSet.set(propKeyReasonString, p.Reason)
+	propSet.set(propKeyUserProps, p.UserProps)
+	return propSet.bytes()
 }
 
 func (p *PubAckProps) setProps(props map[byte][]byte) {
@@ -338,8 +265,8 @@ func (p *PubRecvPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -348,28 +275,13 @@ func (p *PubRecvPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
-		w.WriteByte(byte(CtrlPubRecv << 4))
-		w.WriteByte(2)
-		w.WriteByte(byte(p.PacketID >> 8))
-		return w.WriteByte(byte(p.PacketID))
+	const first = CtrlPubRecv << 4
+	varHeader := []byte{byte(p.PacketID >> 8), byte(p.PacketID)}
+	switch p.Version() {
+	case V311:
+		return p.write(w, first, varHeader, nil)
 	case V5:
-		w.WriteByte(byte(CtrlPubRecv << 4))
-
-		props := p.Props.props()
-		propLen := len(props)
-		if err := writeVarInt(propLen+2, w); err != nil {
-			return err
-		}
-
-		w.WriteByte(byte(p.PacketID >> 8))
-		w.WriteByte(byte(p.PacketID))
-
-		writeVarInt(propLen, w)
-		_, err := w.Write(props)
-
-		return err
+		return p.writeV5(w, first, varHeader, p.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -388,16 +300,11 @@ func (p *PubRecvProps) props() []byte {
 	if p == nil {
 		return nil
 	}
-	result := make([]byte, 0)
-	if p.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(p.Reason)...)
-	}
 
-	if p.UserProps != nil {
-		p.UserProps.encodeTo(result)
-	}
-	return result
+	propSet := propertySet{}
+	propSet.set(propKeyReasonString, p.Reason)
+	propSet.set(propKeyUserProps, p.UserProps)
+	return propSet.bytes()
 }
 
 func (p *PubRecvProps) setProps(props map[byte][]byte) {
@@ -433,8 +340,8 @@ func (p *PubRelPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -443,28 +350,13 @@ func (p *PubRelPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
-		w.WriteByte(byte(CtrlPubRel<<4 | 0x02))
-		w.WriteByte(2)
-		w.WriteByte(byte(p.PacketID >> 8))
-		return w.WriteByte(byte(p.PacketID))
+	const first = CtrlPubRel<<4 | 0x02
+	varHeader := []byte{byte(p.PacketID >> 8), byte(p.PacketID)}
+	switch p.Version() {
+	case V311:
+		return p.write(w, first, varHeader, nil)
 	case V5:
-		w.WriteByte(byte(CtrlPubRel<<4 | 0x02))
-
-		props := p.Props.props()
-		propLen := len(props)
-		if err := writeVarInt(propLen+2, w); err != nil {
-			return err
-		}
-
-		w.WriteByte(byte(p.PacketID >> 8))
-		w.WriteByte(byte(p.PacketID))
-
-		writeVarInt(propLen, w)
-		_, err := w.Write(props)
-
-		return err
+		return p.writeV5(w, first, varHeader, p.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -484,16 +376,10 @@ func (p *PubRelProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
-	if p.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(p.Reason)...)
-	}
-
-	if p.UserProps != nil {
-		p.UserProps.encodeTo(result)
-	}
-	return result
+	propSet := propertySet{}
+	propSet.set(propKeyReasonString, p.Reason)
+	propSet.set(propKeyUserProps, p.UserProps)
+	return propSet.bytes()
 }
 
 func (p *PubRelProps) setProps(props map[byte][]byte) {
@@ -529,8 +415,8 @@ func (p *PubCompPacket) Bytes() []byte {
 		return nil
 	}
 
-	w := &bytes.Buffer{}
-	p.WriteTo(w)
+	w := new(bytes.Buffer)
+	_ = p.WriteTo(w)
 	return w.Bytes()
 }
 
@@ -539,28 +425,12 @@ func (p *PubCompPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	switch p.ProtoVersion {
-	case 0, V311:
-		w.WriteByte(byte(CtrlPubComp << 4))
-		w.WriteByte(2)
-		w.WriteByte(byte(p.PacketID >> 8))
-		return w.WriteByte(byte(p.PacketID))
+	varHeader := []byte{byte(p.PacketID >> 8), byte(p.PacketID)}
+	switch p.Version() {
+	case V311:
+		return p.write(w, CtrlPubComp<<4, varHeader, nil)
 	case V5:
-		w.WriteByte(byte(CtrlPubComp << 4))
-
-		props := p.Props.props()
-		propLen := len(props)
-		if err := writeVarInt(propLen+2, w); err != nil {
-			return err
-		}
-
-		w.WriteByte(byte(p.PacketID >> 8))
-		w.WriteByte(byte(p.PacketID))
-
-		writeVarInt(propLen, w)
-		_, err := w.Write(props)
-
-		return err
+		return p.writeV5(w, CtrlPubComp<<4, varHeader, p.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -579,16 +449,11 @@ func (p *PubCompProps) props() []byte {
 	if p == nil {
 		return nil
 	}
-	result := make([]byte, 0)
-	if p.Reason != "" {
-		result = append(result, propKeyReasonString)
-		result = append(result, encodeStringWithLen(p.Reason)...)
-	}
 
-	if p.UserProps != nil {
-		p.UserProps.encodeTo(result)
-	}
-	return result
+	propSet := propertySet{}
+	propSet.set(propKeyReasonString, p.Reason)
+	propSet.set(propKeyUserProps, p.UserProps)
+	return propSet.bytes()
 }
 
 func (p *PubCompProps) setProps(props map[byte][]byte) {

@@ -30,31 +30,152 @@ var (
 )
 
 // Option is client option for connection options
-type Option func(*AsyncClient) error
+type Option func(*AsyncClient, *connectOptions) error
+
+// WithSecureServer use server certificate for verification
+// won't apply `WithTLS`, `WithCustomTLS`, `WithTLSReader` options
+// when connecting to these servers
+//
+// Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
+func WithSecureServer(servers ...string) Option {
+	return func(c *AsyncClient, options *connectOptions) error {
+		if c == nil {
+			return errors.New("global option can not be applied to ConnectServer")
+		}
+
+		c.secureServers = append(c.secureServers, servers...)
+		return nil
+	}
+}
+
+// WithServer set client servers
+// addresses should be in form of `ip:port` or `domain.name:port`,
+// only TCP connection supported for now
+//
+// Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
+func WithServer(servers ...string) Option {
+	return func(c *AsyncClient, options *connectOptions) error {
+		c.servers = append(c.servers, servers...)
+		return nil
+	}
+}
+
+// WithBuf is the alias of WithBufSize
+//
+// Deprecated: use WithBufSize instead (will be removed in v1.0)
+var WithBuf = WithBufSize
+
+// WithBufSize designate the channel size of send and recv
+func WithBufSize(sendBufSize, recvBufSize int) Option {
+	return func(c *AsyncClient, options *connectOptions) error {
+		if sendBufSize < 1 {
+			sendBufSize = 1
+		}
+
+		if recvBufSize < 1 {
+			recvBufSize = 1
+		}
+
+		c.sendCh = make(chan Packet, sendBufSize)
+		c.recvCh = make(chan *PublishPacket, recvBufSize)
+
+		return nil
+	}
+}
+
+func WithConnHandleFunc(handler ConnHandleFunc) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		options.connHandler = handler
+		return nil
+	}
+}
+
+func WithPubHandleFunc(handler PubHandleFunc) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.pubHandler == nil {
+			client.pubHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithSubHandleFunc(handler SubHandleFunc) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.subHandler == nil {
+			client.subHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithUnsubHandleFunc(handler UnsubHandleFunc) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.unsubHandler == nil {
+			client.unsubHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithNetHandleFunc(handler NetHandleFunc) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.netHandler == nil {
+			client.netHandler = handler
+		}
+		return nil
+	}
+}
+
+func WithPersistHandleFunc(handler PersistHandleFunc) Option {
+	return func(client *AsyncClient, options *connectOptions) error {
+		if client.persistHandler == nil {
+			client.persistHandler = handler
+		}
+		return nil
+	}
+}
+
+// WithLog will create basic logger for the client
+func WithLog(l LogLevel) Option {
+	return func(c *AsyncClient, options *connectOptions) error {
+		c.log = newLogger(l)
+		return nil
+	}
+}
+
+// WithPersist defines the persist method to be used
+func WithPersist(method PersistMethod) Option {
+	return func(c *AsyncClient, options *connectOptions) error {
+		if method != nil {
+			c.persist = method
+		}
+		return nil
+	}
+}
 
 // WithCleanSession will set clean flag in connect packet
 func WithCleanSession(f bool) Option {
-	return func(c *AsyncClient) error {
-		c.options.cleanSession = f
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.connPacket.CleanSession = f
 		return nil
 	}
 }
 
 // WithIdentity for username and password
 func WithIdentity(username, password string) Option {
-	return func(c *AsyncClient) error {
-		c.options.username = username
-		c.options.password = password
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.connPacket.Username = username
+		options.connPacket.Password = password
 		return nil
 	}
 }
 
 // WithKeepalive set the keepalive interval (time in second)
 func WithKeepalive(keepalive uint16, factor float64) Option {
-	return func(c *AsyncClient) error {
-		c.options.keepalive = time.Duration(keepalive) * time.Second
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.keepalive = time.Duration(keepalive) * time.Second
 		if factor > 1 {
-			c.options.keepaliveFactor = factor
+			options.keepaliveFactor = factor
 		} else {
 			factor = 1.2
 		}
@@ -64,8 +185,8 @@ func WithKeepalive(keepalive uint16, factor float64) Option {
 
 // WithAutoReconnect set client to auto reconnect to server when connection failed
 func WithAutoReconnect(autoReconnect bool) Option {
-	return func(c *AsyncClient) error {
-		c.options.autoReconnect = autoReconnect
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.autoReconnect = autoReconnect
 		return nil
 	}
 }
@@ -78,7 +199,7 @@ func WithAutoReconnect(autoReconnect bool) Option {
 // e.g. FirstDelay = 1s and Factor = 2
 // 		then the SecondDelay is 2s, the ThirdDelay is 4s
 func WithBackoffStrategy(firstDelay, maxDelay time.Duration, factor float64) Option {
-	return func(c *AsyncClient) error {
+	return func(c *AsyncClient, options *connectOptions) error {
 		if firstDelay < time.Millisecond {
 			firstDelay = time.Millisecond
 		}
@@ -91,49 +212,29 @@ func WithBackoffStrategy(firstDelay, maxDelay time.Duration, factor float64) Opt
 			factor = 1
 		}
 
-		c.options.firstDelay = firstDelay
-		c.options.maxDelay = maxDelay
-		c.options.backOffFactor = factor
+		options.firstDelay = firstDelay
+		options.maxDelay = maxDelay
+		options.backOffFactor = factor
 		return nil
 	}
 }
 
 // WithClientID set the client id for connection
 func WithClientID(clientID string) Option {
-	return func(c *AsyncClient) error {
-		c.options.clientID = clientID
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.connPacket.ClientID = clientID
 		return nil
 	}
 }
 
 // WithWill mark this connection as a will teller
 func WithWill(topic string, qos QosLevel, retain bool, payload []byte) Option {
-	return func(c *AsyncClient) error {
-		c.options.isWill = true
-		c.options.willTopic = topic
-		c.options.willQos = qos
-		c.options.willRetain = retain
-		c.options.willPayload = payload
-		return nil
-	}
-}
-
-// WithSecureServer use server certificate for verification
-// won't apply `WithTLS`, `WithCustomTLS`, `WithTLSReader` options
-// when connecting to these servers
-func WithSecureServer(servers ...string) Option {
-	return func(c *AsyncClient) error {
-		c.options.secureServers = append(c.options.secureServers, servers...)
-		return nil
-	}
-}
-
-// WithServer set client servers
-// addresses should be in form of `ip:port` or `domain.name:port`,
-// only TCP connection supported for now
-func WithServer(servers ...string) Option {
-	return func(c *AsyncClient) error {
-		c.options.servers = append(c.options.servers, servers...)
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.connPacket.IsWill = true
+		options.connPacket.WillTopic = topic
+		options.connPacket.WillQos = qos
+		options.connPacket.WillRetain = retain
+		options.connPacket.WillMessage = payload
 		return nil
 	}
 }
@@ -141,7 +242,7 @@ func WithServer(servers ...string) Option {
 // WithTLSReader set tls from client cert, key, ca reader, apply to all servers
 // listed in `WithServer` Option
 func WithTLSReader(certReader, keyReader, caReader io.Reader, serverNameOverride string, skipVerify bool) Option {
-	return func(c *AsyncClient) error {
+	return func(c *AsyncClient, options *connectOptions) error {
 		b, err := ioutil.ReadAll(certReader)
 		if err != nil {
 			return err
@@ -166,7 +267,7 @@ func WithTLSReader(certReader, keyReader, caReader io.Reader, serverNameOverride
 			return err
 		}
 
-		c.options.tlsConfig = &tls.Config{
+		options.tlsConfig = &tls.Config{
 			Certificates:       []tls.Certificate{cert},
 			InsecureSkipVerify: skipVerify,
 			ClientCAs:          cp,
@@ -180,7 +281,7 @@ func WithTLSReader(certReader, keyReader, caReader io.Reader, serverNameOverride
 // WithTLS set client tls from cert, key and ca file, apply to all servers
 // listed in `WithServer` Option
 func WithTLS(certFile, keyFile, caCert, serverNameOverride string, skipVerify bool) Option {
-	return func(c *AsyncClient) error {
+	return func(c *AsyncClient, options *connectOptions) error {
 		b, err := ioutil.ReadFile(caCert)
 		if err != nil {
 			return err
@@ -196,7 +297,7 @@ func WithTLS(certFile, keyFile, caCert, serverNameOverride string, skipVerify bo
 			return err
 		}
 
-		c.options.tlsConfig = &tls.Config{
+		options.tlsConfig = &tls.Config{
 			Certificates:       []tls.Certificate{cert},
 			InsecureSkipVerify: skipVerify,
 			ClientCAs:          cp,
@@ -208,54 +309,31 @@ func WithTLS(certFile, keyFile, caCert, serverNameOverride string, skipVerify bo
 
 // WithCustomTLS replaces the TLS options with a custom tls.Config
 func WithCustomTLS(config *tls.Config) Option {
-	return func(c *AsyncClient) error {
-		c.options.tlsConfig = config
+	return func(c *AsyncClient, options *connectOptions) error {
+		if config == nil {
+			options.tlsConfig = nil
+		} else {
+			options.tlsConfig = config.Clone()
+		}
 		return nil
 	}
 }
 
 // WithDialTimeout for connection time out (time in second)
 func WithDialTimeout(timeout uint16) Option {
-	return func(c *AsyncClient) error {
-		c.options.dialTimeout = time.Duration(timeout) * time.Second
-		return nil
-	}
-}
-
-// WithBuf is the alias of WithBufSize
-var WithBuf = WithBufSize
-
-// WithBufSize designate the channel size of send and recv
-func WithBufSize(sendBuf, recvBuf int) Option {
-	return func(c *AsyncClient) error {
-		if sendBuf < 1 {
-			sendBuf = 1
-		}
-		if recvBuf < 1 {
-			recvBuf = 1
-		}
-
-		c.options.sendChanSize = sendBuf
-		c.options.recvChanSize = recvBuf
-		return nil
-	}
-}
-
-// WithLog will create basic logger for the client
-func WithLog(l LogLevel) Option {
-	return func(c *AsyncClient) error {
-		c.log = newLogger(l)
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.dialTimeout = time.Duration(timeout) * time.Second
 		return nil
 	}
 }
 
 // WithVersion defines the mqtt protocol ProtoVersion in use
 func WithVersion(version ProtoVersion, compromise bool) Option {
-	return func(c *AsyncClient) error {
+	return func(c *AsyncClient, options *connectOptions) error {
 		switch version {
 		case V311, V5:
-			c.options.protoVersion = version
-			c.options.protoCompromise = compromise
+			options.protoVersion = version
+			options.protoCompromise = compromise
 			return nil
 		}
 
@@ -265,7 +343,7 @@ func WithVersion(version ProtoVersion, compromise bool) Option {
 
 // WithRouter set the router for topic dispatch
 func WithRouter(r TopicRouter) Option {
-	return func(c *AsyncClient) error {
+	return func(c *AsyncClient, options *connectOptions) error {
 		if r != nil {
 			c.router = r
 		}
@@ -273,40 +351,9 @@ func WithRouter(r TopicRouter) Option {
 	}
 }
 
-// WithPersist defines the persist method to be used
-func WithPersist(method PersistMethod) Option {
-	return func(c *AsyncClient) error {
-		if method != nil {
-			c.persist = method
-		}
+func WithConnPacket(pkt ConnPacket) Option {
+	return func(c *AsyncClient, options *connectOptions) error {
+		options.connPacket = &pkt
 		return nil
 	}
-}
-
-// clientOptions is the options for client to connect, reconnect, disconnect
-type clientOptions struct {
-	protoVersion     ProtoVersion  // mqtt protocol ProtoVersion
-	protoCompromise  bool          // compromise to server protocol ProtoVersion
-	sendChanSize     int           // send channel size
-	recvChanSize     int           // recv channel size
-	servers          []string      // server address strings
-	secureServers    []string      // servers with valid tls certificates
-	dialTimeout      time.Duration // dial timeout in second
-	clientID         string        // used by ConnPacket
-	username         string        // used by ConnPacket
-	password         string        // used by ConnPacket
-	keepalive        time.Duration // used by ConnPacket (time in second)
-	keepaliveFactor  float64       // used for reasonable amount time to close conn if no ping resp
-	cleanSession     bool          // used by ConnPacket
-	isWill           bool          // used by ConnPacket
-	willTopic        string        // used by ConnPacket
-	willPayload      []byte        // used by ConnPacket
-	willQos          byte          // used by ConnPacket
-	willRetain       bool          // used by ConnPacket
-	tlsConfig        *tls.Config   // tls config with client side cert
-	maxDelay         time.Duration
-	firstDelay       time.Duration
-	backOffFactor    float64
-	autoReconnect    bool
-	defaultTlsConfig *tls.Config
 }

@@ -1,4 +1,4 @@
-// +build test offline
+// +build offline
 
 /*
  * Copyright Go-IIoT (https://github.com/goiiot)
@@ -19,7 +19,6 @@
 package libmqtt
 
 import (
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,11 +27,9 @@ import (
 )
 
 func TestClient_Reconnect(t *testing.T) {
-	for _, c := range []Client{plainClient(t, nil), tlsClient(t, nil)} {
-		startTime := time.Now()
-		once := &sync.Once{}
-		var retryCount int32
-		c.Connect(func(server string, code byte, err error) {
+	var retryCount int32
+	clients := allClients(t, &extraHandler{
+		onConnHandle: func(c Client, server string, code byte, err error) bool {
 			if err != nil {
 				t.Log("connect to server error", err)
 			}
@@ -41,21 +38,31 @@ func TestClient_Reconnect(t *testing.T) {
 				t.Log("connect to server failed", code)
 			}
 
-			once.Do(func() {
-				atomic.StoreInt32(&retryCount, 0)
-				time.Sleep(7 * time.Second)
-				t.Log("Destroy client")
-				c.Destroy(true)
-			})
 			atomic.AddInt32(&retryCount, 1)
-		})
-		c.Wait()
+			return true
+		},
+	})
+
+	for client, connect := range clients {
+		startTime := time.Now()
+		atomic.StoreInt32(&retryCount, 0)
+
+		go func() {
+			time.Sleep(7 * time.Second)
+			t.Log("Destroy client")
+			client.Destroy(true)
+		}()
+
+		connect()
+		client.Wait()
+
 		elapsed := time.Now().Sub(startTime)
 		t.Log("time used", elapsed)
 
 		if atomic.LoadInt32(&retryCount) != 4 {
 			t.Error("retryCount != 4")
 		}
-		goleak.VerifyNoLeaks(t)
 	}
+
+	goleak.VerifyNoLeaks(t)
 }

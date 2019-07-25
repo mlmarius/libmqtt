@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	pah "github.com/eclipse/paho.mqtt.golang"
+
 	lib "github.com/goiiot/libmqtt"
 )
 
@@ -41,9 +42,7 @@ func BenchmarkLibmqttClient(b *testing.B) {
 	b.ReportAllocs()
 
 	client, err := lib.NewClient(
-		lib.WithServer(testServer),
 		lib.WithKeepalive(testKeepalive, 1.2),
-		lib.WithBuf(testBufSize, testBufSize),
 		lib.WithCleanSession(true),
 	)
 
@@ -51,28 +50,31 @@ func BenchmarkLibmqttClient(b *testing.B) {
 		b.Error(err)
 	}
 
-	client.HandleUnSub(func(topic []string, err error) {
-		if err != nil {
-			b.Error(err)
-		}
-		client.Destroy(true)
-	})
+	_ = client.ConnectServer(testServer,
+		lib.WithUnsubHandleFunc(func(client lib.Client, topics []string, err error) {
+			if err != nil {
+				b.Error(err)
+			}
+			client.Destroy(true)
+		}),
+		lib.WithConnHandleFunc(func(client lib.Client, server string, code byte, err error) {
+			if err != nil {
+				b.Error(err)
+			} else if code != lib.CodeSuccess {
+				b.Error(code)
+			}
+			b.ResetTimer()
 
-	b.ResetTimer()
-	client.Connect(func(server string, code byte, err error) {
-		if err != nil {
-			b.Error(err)
-		} else if code != lib.CodeSuccess {
-			b.Error(code)
-		}
-		for i := 0; i < b.N; i++ {
-			client.Publish(&lib.PublishPacket{
-				TopicName: testTopic,
-				Payload:   testTopicMsg,
-			})
-		}
-		client.UnSubscribe(testTopic)
-	})
+			for i := 0; i < b.N; i++ {
+				client.Publish(&lib.PublishPacket{
+					TopicName: testTopic,
+					Payload:   testTopicMsg,
+				})
+			}
+			client.UnSubscribe(testTopic)
+		}),
+	)
+
 	client.Wait()
 }
 
@@ -94,7 +96,6 @@ func BenchmarkPahoClient(b *testing.B) {
 		Store:               pah.NewMemoryStore(),
 	})
 
-	b.ResetTimer()
 	t := client.Connect()
 	if !t.Wait() {
 		b.Fail()
@@ -104,6 +105,7 @@ func BenchmarkPahoClient(b *testing.B) {
 		b.Error(err)
 	}
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		client.Publish(testTopic, 0, false, testTopicMsg)
 	}

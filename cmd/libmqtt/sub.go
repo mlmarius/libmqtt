@@ -44,7 +44,7 @@ func execSub(args []string) bool {
 		topics = append(topics, &mqtt.Topic{Name: topicStr[0], Qos: mqtt.QosLevel(qos)})
 	}
 	for _, t := range topics {
-		client.Handle(t.Name, topicHandler)
+		client.HandleTopic(t.Name, topicHandler)
 	}
 	client.Subscribe(topics...)
 	return true

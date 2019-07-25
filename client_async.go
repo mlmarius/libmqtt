@@ -17,19 +17,11 @@
 package libmqtt
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
-	"errors"
-	"math"
-	"net"
+	"strings"
 	"sync"
-	"time"
-)
-
-var (
-	// ErrTimeOut connection timeout error
-	ErrTimeOut = errors.New("connection timeout ")
+	"sync/atomic"
 )
 
 // Client type for *AsyncClient
@@ -39,98 +31,119 @@ type Client = *AsyncClient
 func NewClient(options ...Option) (Client, error) {
 	c := defaultClient()
 
-	for _, o := range options {
-		err := o(c)
+	for _, setOption := range options {
+		err := setOption(c, &c.options)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if (len(c.options.servers) + len(c.options.secureServers)) < 1 {
-		return nil, errors.New("no server provided, won't work ")
-	}
-
-	c.sendCh = make(chan Packet, c.options.sendChanSize)
-	c.recvCh = make(chan *PublishPacket, c.options.recvChanSize)
+	c.addWorker(c.handleTopicMsg, c.handleMsg)
 
 	return c, nil
 }
 
-// AsyncClient mqtt client implementation
+// AsyncClient is the async mqtt client implementation
 type AsyncClient struct {
-	options *clientOptions      // client connection options
-	msgCh   chan *message       // error channel
-	sendCh  chan Packet         // pub channel for sending publish packet to server
-	recvCh  chan *PublishPacket // recv channel for server pub receiving
-	idGen   *idGenerator        // Packet id generator
-	router  TopicRouter         // Topic router
-	persist PersistMethod       // Persist method
-	workers *sync.WaitGroup     // Workers (goroutines)
-	log     *logger             // client logger
+	// Deprecated: use ConnectServer instead (will be removed in v1.0)
+	servers []string
+	// Deprecated: use ConnectServer instead (will be removed in v1.0)
+	secureServers []string
+
+	options          connectOptions      // client wide connection options
+	msgCh            chan *message       // error channel
+	sendCh           chan Packet         // pub channel for sending publish packet to server
+	recvCh           chan *PublishPacket // recv channel for server pub receiving
+	idGen            *idGenerator        // Packet id generator
+	router           TopicRouter         // Topic router
+	persist          PersistMethod       // Persist method
+	connectedServers *sync.Map
+	workers          *sync.WaitGroup // Workers (goroutines)
+	log              *logger         // client logger
 
 	// success/error handlers
-	pubHandler     PubHandler
-	subHandler     SubHandler
-	unSubHandler   UnSubHandler
-	netHandler     NetHandler
-	persistHandler PersistHandler
+	pubHandler     PubHandleFunc
+	subHandler     SubHandleFunc
+	unsubHandler   UnsubHandleFunc
+	netHandler     NetHandleFunc
+	persistHandler PersistHandleFunc
 
-	ctx  context.Context    // closure of this channel will signal all client worker to stop
-	exit context.CancelFunc // called when client exit
+	ctx     context.Context    // closure of this channel will signal all client worker to stop
+	exit    context.CancelFunc // called when client exit
+	stopSig <-chan struct{}
 }
 
 // create a client with default options
 func defaultClient() *AsyncClient {
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, exitFunc := context.WithCancel(context.Background())
+
 	return &AsyncClient{
-		options: &clientOptions{
-			sendChanSize:     1,
-			recvChanSize:     1,
-			maxDelay:         2 * time.Minute,
-			firstDelay:       5 * time.Second,
-			backOffFactor:    1.5,
-			dialTimeout:      20 * time.Second,
-			keepalive:        2 * time.Minute,
-			keepaliveFactor:  1.5,
-			protoVersion:     V311,
-			protoCompromise:  false,
-			defaultTlsConfig: &tls.Config{},
-		},
+		servers:       make([]string, 0, 1),
+		secureServers: make([]string, 0, 1),
+
+		options: defaultConnectOptions(),
 		msgCh:   make(chan *message, 10),
-		ctx:     ctx,
-		exit:    cancel,
+		sendCh:  make(chan Packet, 1),
+		recvCh:  make(chan *PublishPacket, 1),
 		router:  NewTextRouter(),
 		idGen:   newIDGenerator(),
-		workers: &sync.WaitGroup{},
 		persist: NonePersist,
+
+		connectedServers: new(sync.Map),
+		workers:          new(sync.WaitGroup),
+
+		ctx:     ctx,
+		exit:    exitFunc,
+		stopSig: ctx.Done(),
 	}
 }
 
 // Handle register subscription message route
+//
+// Deprecated: use HandleTopic instead, will be removed in v1.0
 func (c *AsyncClient) Handle(topic string, h TopicHandler) {
 	if h != nil {
-		c.log.d("HDL registered topic handler, topic =", topic)
+		c.log.v("CLI registered topic handler, topic =", topic)
+		c.router.Handle(topic, func(client Client, topic string, qos QosLevel, msg []byte) {
+			h(topic, qos, msg)
+		})
+	}
+}
+
+// HandleTopic add a topic routing rule
+func (c *AsyncClient) HandleTopic(topic string, h TopicHandleFunc) {
+	if h != nil {
+		c.log.v("CLI registered topic handler, topic =", topic)
 		c.router.Handle(topic, h)
 	}
 }
 
-// Connect to all designated server
+// Connect to all designated servers
+//
+// Deprecated: use Client.ConnectServer instead (will be removed in v1.0)
 func (c *AsyncClient) Connect(h ConnHandler) {
-	c.log.d("CLI connect to server, handler =", h)
+	c.log.v("CLI connect to server, handler =", h)
 
-	for _, s := range c.options.servers {
-		c.workers.Add(1)
-		go c.connect(s, false, h, c.options.protoVersion, c.options.firstDelay)
+	connHandler := func(client Client, server string, code byte, err error) {
+		h(server, code, err)
 	}
 
-	for _, s := range c.options.secureServers {
-		c.workers.Add(1)
-		go c.connect(s, true, h, c.options.protoVersion, c.options.firstDelay)
+	for _, s := range c.servers {
+		options := c.options.clone()
+		options.connHandler = connHandler
+
+		c.addWorker(func() { options.connect(c, s, c.options.protoVersion, c.options.firstDelay) })
 	}
 
-	c.workers.Add(2)
-	go c.handleTopicMsg()
-	go c.handleMsg()
+	for _, s := range c.secureServers {
+		secureOptions := c.options.clone()
+		secureOptions.connHandler = connHandler
+		secureOptions.tlsConfig = &tls.Config{
+			ServerName: strings.SplitN(s, ":", 1)[0],
+		}
+
+		c.addWorker(func() { secureOptions.connect(c, s, secureOptions.protoVersion, secureOptions.firstDelay) })
+	}
 }
 
 // Publish message(s) to topic(s), one to one
@@ -153,11 +166,16 @@ func (c *AsyncClient) Publish(msg ...*PublishPacket) {
 			if p.PacketID == 0 {
 				p.PacketID = c.idGen.next(p)
 				if err := c.persist.Store(sendKey(p.PacketID), p); err != nil {
-					notifyPersistMsg(c.msgCh, err)
+					notifyPersistMsg(c.msgCh, p, err)
 				}
 			}
 		}
-		c.sendCh <- p
+
+		select {
+		case <-c.stopSig:
+			return
+		case c.sendCh <- p:
+		}
 	}
 }
 
@@ -172,24 +190,39 @@ func (c *AsyncClient) Subscribe(topics ...*Topic) {
 	s := &SubscribePacket{Topics: topics}
 	s.PacketID = c.idGen.next(s)
 
-	c.sendCh <- s
+	select {
+	case <-c.stopSig:
+		return
+	case c.sendCh <- s:
+		return
+	}
 }
 
 // UnSubscribe topic(s)
+// Deprecated: use Unsubscribe instead, will be removed in v1.0
 func (c *AsyncClient) UnSubscribe(topics ...string) {
+	c.Unsubscribe(topics...)
+}
+
+// Unsubscribe topic(s)
+func (c *AsyncClient) Unsubscribe(topics ...string) {
 	if c.isClosing() {
 		return
 	}
 
 	c.log.d("CLI unsubscribe topic(s) =", topics)
 
-	u := &UnSubPacket{TopicNames: topics}
+	u := &UnsubPacket{TopicNames: topics}
 	u.PacketID = c.idGen.next(u)
 
-	c.sendCh <- u
+	select {
+	case <-c.stopSig:
+		return
+	case c.sendCh <- u:
+	}
 }
 
-// Wait will wait for all connection to exit
+// Wait will wait for all connections to exit
 func (c *AsyncClient) Wait() {
 	if c.isClosing() {
 		return
@@ -200,202 +233,63 @@ func (c *AsyncClient) Wait() {
 }
 
 // Destroy will disconnect form all server
-// If force is true, then close connection without sending a DisConnPacket
+// If force is true, then close connection without sending a DisconnPacket
 func (c *AsyncClient) Destroy(force bool) {
 	c.log.d("CLI destroying client with force =", force)
 	if force {
 		c.exit()
 	} else {
-		c.sendCh <- &DisConnPacket{}
-	}
-}
-
-// HandlePub register handler for pub error
-func (c *AsyncClient) HandlePub(h PubHandler) {
-	c.log.d("CLI registered pub handler")
-	c.pubHandler = h
-}
-
-// HandleSub register handler for extra sub info
-func (c *AsyncClient) HandleSub(h SubHandler) {
-	c.log.d("CLI registered sub handler")
-	c.subHandler = h
-}
-
-// HandleUnSub register handler for unsubscribe error
-func (c *AsyncClient) HandleUnSub(h UnSubHandler) {
-	c.log.d("CLI registered unsubscribe handler")
-	c.unSubHandler = h
-}
-
-// HandleNet register handler for net error
-func (c *AsyncClient) HandleNet(h NetHandler) {
-	c.log.d("CLI registered net handler")
-	c.netHandler = h
-}
-
-// HandlePersist register handler for net error
-func (c *AsyncClient) HandlePersist(h PersistHandler) {
-	c.log.d("CLI registered persist handler")
-	c.persistHandler = h
-}
-
-// connect to one server and start mqtt logic
-func (c *AsyncClient) connect(server string, secure bool, h ConnHandler, version ProtoVersion, reconnectDelay time.Duration) {
-	defer c.workers.Done()
-
-	var (
-		conn net.Conn
-		err  error
-	)
-
-	tlsConfig := c.options.tlsConfig
-	if secure {
-		tlsConfig = c.options.defaultTlsConfig
-	}
-
-	if tlsConfig != nil {
-		// with tls
-		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: c.options.dialTimeout}, "tcp", server, tlsConfig)
-		if err != nil {
-			c.log.e("CLI connect with tls failed, err =", err, "server =", server, "secure_server =", secure)
-			if h != nil {
-				go h(server, math.MaxUint8, err)
-			}
-
-			if c.options.autoReconnect && !c.isClosing() {
-				goto reconnect
-			}
-			return
-		}
-	} else {
-		// without tls
-		conn, err = net.DialTimeout("tcp", server, c.options.dialTimeout)
-		if err != nil {
-			c.log.e("CLI connect failed, err =", err, "server =", server)
-			if h != nil {
-				go h(server, math.MaxUint8, err)
-			}
-
-			if c.options.autoReconnect && !c.isClosing() {
-				goto reconnect
-			}
-			return
-		}
-	}
-	defer conn.Close()
-	{
-		if c.isClosing() {
-			return
-		}
-
-		connImpl := &clientConn{
-			protoVersion: version,
-			parent:       c,
-			name:         server,
-			conn:         conn,
-			connRW:       bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-			keepaliveC:   make(chan int),
-			logicSendC:   make(chan Packet),
-			netRecvC:     make(chan Packet),
-		}
-		connImpl.ctx, connImpl.exit = context.WithCancel(c.ctx)
-
-		c.workers.Add(2)
-		go connImpl.handleSend()
-		go connImpl.handleRecv()
-
-		connImpl.send(&ConnPacket{
-			Username:     c.options.username,
-			Password:     c.options.password,
-			ClientID:     c.options.clientID,
-			CleanSession: c.options.cleanSession,
-			IsWill:       c.options.isWill,
-			WillQos:      c.options.willQos,
-			WillTopic:    c.options.willTopic,
-			WillMessage:  c.options.willPayload,
-			WillRetain:   c.options.willRetain,
-			Keepalive:    uint16(c.options.keepalive / time.Second),
+		c.connectedServers.Range(func(key, value interface{}) bool {
+			c.Disconnect(key.(string), nil)
+			return true
 		})
 
-		dialTimer := time.NewTimer(c.options.dialTimeout)
-		defer dialTimer.Stop()
-		select {
-		case <-c.ctx.Done():
-			return
-		case pkt, more := <-connImpl.netRecvC:
-			if !more {
-				if h != nil {
-					go h(server, math.MaxUint8, ErrDecodeBadPacket)
-				}
-				close(connImpl.logicSendC)
-				return
-			}
-
-			if pkt.Type() == CtrlConnAck {
-				p := pkt.(*ConnAckPacket)
-
-				if p.Code != CodeSuccess {
-					close(connImpl.logicSendC)
-					if version > V311 && c.options.protoCompromise && p.Code == CodeUnsupportedProtoVersion {
-						c.workers.Add(1)
-						go c.connect(server, secure, h, version-1, reconnectDelay)
-						return
-					}
-
-					if h != nil {
-						go h(server, p.Code, nil)
-					}
-					return
-				}
-			} else {
-				close(connImpl.logicSendC)
-				if h != nil {
-					go h(server, math.MaxUint8, ErrDecodeBadPacket)
-				}
-				return
-			}
-		case <-dialTimer.C:
-			close(connImpl.logicSendC)
-			if h != nil {
-				go h(server, math.MaxUint8, ErrTimeOut)
-			}
-			return
-		}
-
-		c.log.i("CLI connected to server =", server)
-		if h != nil {
-			go h(server, CodeSuccess, nil)
-		}
-
-		// login success, start mqtt logic
-		connImpl.logic()
-
-		if c.isClosing() {
-			return
-		}
+		c.exit()
 	}
-reconnect:
-	// reconnect
-	c.log.e("CLI reconnecting to server =", server, "delay =", reconnectDelay)
-	time.Sleep(reconnectDelay)
+}
 
+// Disconnect from one server
+// return true if DisconnPacket will be sent
+func (c *AsyncClient) Disconnect(server string, packet *DisconnPacket) bool {
+	if packet == nil {
+		packet = &DisconnPacket{}
+	}
+
+	if val, ok := c.connectedServers.Load(server); ok {
+		conn := val.(*clientConn)
+		atomic.StoreUint32(&conn.parentExit, 1)
+		conn.send(packet)
+
+		select {
+		case <-conn.stopSig:
+			// wait for conn to exit
+		case <-c.stopSig:
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func (c *AsyncClient) addWorker(workerFunc ...func()) {
 	if c.isClosing() {
 		return
 	}
 
-	reconnectDelay = time.Duration(float64(reconnectDelay) * c.options.backOffFactor)
-	if reconnectDelay > c.options.maxDelay {
-		reconnectDelay = c.options.maxDelay
+	for _, f := range workerFunc {
+		c.workers.Add(1)
+		go func(f func()) {
+			defer c.workers.Done()
+			f()
+		}(f)
 	}
-
-	c.workers.Add(1)
-	go c.connect(server, secure, h, version, reconnectDelay)
 }
 
 func (c *AsyncClient) isClosing() bool {
 	select {
-	case <-c.ctx.Done():
+	case <-c.stopSig:
 		return true
 	default:
 		return false
@@ -403,56 +297,16 @@ func (c *AsyncClient) isClosing() bool {
 }
 
 func (c *AsyncClient) handleTopicMsg() {
-	defer c.workers.Done()
-
 	for {
 		select {
-		case <-c.ctx.Done():
+		case <-c.stopSig:
 			return
 		case pkt, more := <-c.recvCh:
 			if !more {
 				return
 			}
 
-			c.router.Dispatch(pkt)
-		}
-	}
-}
-
-func (c *AsyncClient) handleMsg() {
-	defer c.workers.Done()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case m, more := <-c.msgCh:
-			if !more {
-				return
-			}
-
-			switch m.what {
-			case pubMsg:
-				if c.pubHandler != nil {
-					c.pubHandler(m.msg, m.err)
-				}
-			case subMsg:
-				if c.subHandler != nil {
-					c.subHandler(m.obj.([]*Topic), m.err)
-				}
-			case unSubMsg:
-				if c.unSubHandler != nil {
-					c.unSubHandler(m.obj.([]string), m.err)
-				}
-			case netMsg:
-				if c.netHandler != nil {
-					c.netHandler(m.msg, m.err)
-				}
-			case persistMsg:
-				if c.persistHandler != nil {
-					c.persistHandler(m.err)
-				}
-			}
+			c.addWorker(func() { c.router.Dispatch(c, pkt) })
 		}
 	}
 }

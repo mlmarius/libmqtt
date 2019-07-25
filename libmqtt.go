@@ -16,13 +16,127 @@
 
 package libmqtt
 
+import (
+	"fmt"
+	"io"
+	"sync"
+)
+
+var (
+	propsDefaultBoolValue = map[byte]bool{
+		propKeyRetainAvail:      true,
+		propKeyWildcardSubAvail: true,
+		propKeySubIDAvail:       true,
+		propKeySharedSubAvail:   true,
+	}
+)
+
+type propertySet map[byte][][]byte
+
+func (p propertySet) add(propKey byte, propValue interface{}) {
+	var val []byte
+	switch v := propValue.(type) {
+	case string:
+		if propValue.(string) != "" {
+			val = encodeStringWithLen(propValue.(string))
+		}
+	case []byte:
+		if len(propValue.([]byte)) > 0 {
+			val = encodeBytesWithLen(propValue.([]byte))
+		}
+	case *bool:
+		if *v {
+			val = []byte{1}
+		} else {
+			val = []byte{0}
+		}
+	case bool:
+		if v {
+			val = []byte{1}
+		} else {
+			val = []byte{0}
+		}
+	case uint8:
+		if v != 0 {
+			val = []byte{v}
+		}
+	case uint16:
+		if v != 0 {
+			val = make([]byte, 2)
+			putUint16(val, v)
+		}
+	case int:
+		val, _ = varIntBytes(v)
+	case uint32:
+		if v != 0 {
+			val = make([]byte, 4)
+			putUint32(val, v)
+		}
+	case UserProps:
+		v.encodeTo(val)
+	case nil:
+		return
+	default:
+		panic(fmt.Sprintf("unexpected property value type %T", v))
+	}
+
+	if v, ok := p[propKey]; ok {
+		p[propKey] = append(v, val)
+	}
+}
+
+func (p propertySet) set(propKey byte, propValue interface{}) {
+	p.del(propKey)
+	p.add(propKey, propValue)
+}
+
+func (p propertySet) del(propKey byte) {
+	delete(p, propKey)
+}
+
+func (p propertySet) bytes() []byte {
+	ret := make([]byte, 0)
+	for propKey, propValue := range p {
+		for _, v := range propValue {
+			ret = append(ret, propKey)
+			ret = append(ret, v...)
+		}
+	}
+	return ret
+}
+
 // UserProps contains user defined properties
 type UserProps map[string][]string
+
+func (u UserProps) Add(key, value string) {
+	val, ok := u[key]
+	if !ok || val == nil {
+		val = make([]string, 0)
+	}
+
+	u[key] = append(val, value)
+}
+
+func (u UserProps) Get(key string) (string, bool) {
+	if val, ok := u[key]; ok && len(val) > 0 {
+		return val[0], true
+	}
+
+	return "", false
+}
+
+func (u UserProps) Set(key string, value string) {
+	u[key] = []string{value}
+}
+
+func (u UserProps) Del(key string) {
+	delete(u, key)
+}
 
 func (u UserProps) encodeTo(result []byte) []byte {
 	for k, v := range u {
 		for _, val := range v {
-			result = append(result, propKeyUserProps)
+			// result = append(result, propKeyUserProps)
 			result = append(result, encodeStringWithLen(k)...)
 			result = append(result, encodeStringWithLen(val)...)
 		}
@@ -35,7 +149,7 @@ type Packet interface {
 	// Type return the packet type
 	Type() CtrlType
 
-	// Bytes encode packet to bytes
+	// Bytes presentation of this packet
 	Bytes() []byte
 
 	// Write bytes to the buffered writer
@@ -43,15 +157,70 @@ type Packet interface {
 
 	// Version MQTT version of the packet
 	Version() ProtoVersion
+
+	SetVersion(version ProtoVersion)
 }
 
 // BasePacket for packet encoding and MQTT version note
 type BasePacket struct {
 	ProtoVersion ProtoVersion
+	mutex        sync.RWMutex
+}
+
+func (b *BasePacket) write(w io.Writer, first byte, varHeader, payload []byte) error {
+	_, err := w.Write([]byte{first})
+	if err != nil {
+		return err
+	}
+
+	remainingLengthBytes, err := varIntBytes(len(varHeader) + len(payload))
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(remainingLengthBytes)
+	if err != nil {
+		return err
+	}
+
+	if varHeader != nil {
+		_, err = w.Write(varHeader)
+		if err != nil {
+			return err
+		}
+	}
+
+	if payload != nil {
+		_, err = w.Write(payload)
+	}
+	return err
+}
+
+func (b *BasePacket) writeV5(w io.Writer, first byte, varHeader, props, payload []byte) error {
+	propLen := len(props)
+	propsLengthBytes, err := varIntBytes(propLen)
+	if err != nil {
+		return err
+	}
+
+	actualVarHeader := make([]byte, 0, len(varHeader)+len(propsLengthBytes)+propLen)
+	actualVarHeader = append(actualVarHeader, varHeader...)
+	actualVarHeader = append(actualVarHeader, propsLengthBytes...)
+	actualVarHeader = append(actualVarHeader, props...)
+	return b.write(w, first, actualVarHeader, payload)
+}
+
+func (b *BasePacket) SetVersion(version ProtoVersion) {
+	b.mutex.Lock()
+	b.ProtoVersion = version
+	b.mutex.Unlock()
 }
 
 // Version is the MQTT version of this packet
 func (b *BasePacket) Version() ProtoVersion {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
 	if b.ProtoVersion != 0 {
 		return b.ProtoVersion
 	}
