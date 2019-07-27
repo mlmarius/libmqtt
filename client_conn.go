@@ -19,6 +19,7 @@ package libmqtt
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"sync/atomic"
 	"time"
@@ -49,7 +50,13 @@ func (c *clientConn) parentExiting() bool {
 // start mqtt logic
 func (c *clientConn) logic() {
 	defer func() {
-		_ = c.conn.Close()
+		err := c.conn.Close()
+		if err != nil {
+			notifyNetMsg(c.parent.msgCh, c.name, err)
+		} else {
+			notifyNetMsg(c.parent.msgCh, c.name, io.EOF)
+		}
+
 		c.parent.log.e("NET exit logic for server =", c.name)
 	}()
 
@@ -258,6 +265,8 @@ func (c *clientConn) handleSend() {
 			if err := c.connRW.Flush(); err != nil {
 				c.parent.log.e("NET flush error", err)
 				flushSig.Reset(time.Hour)
+
+				notifyNetMsg(c.parent.msgCh, c.name, err)
 				return
 			}
 		case pkt, more := <-c.parent.sendCh:
@@ -283,6 +292,7 @@ func (c *clientConn) handleSend() {
 				// client exit with disconnect
 				if err := c.connRW.Flush(); err != nil {
 					c.parent.log.e("NET flush error", err)
+					notifyNetMsg(c.parent.msgCh, c.name, err)
 				}
 				_ = c.conn.Close()
 
@@ -315,8 +325,10 @@ func (c *clientConn) handleSend() {
 				// disconnect to server, no more action
 				if err := c.connRW.Flush(); err != nil {
 					c.parent.log.e("NET flush error", err)
+					notifyNetMsg(c.parent.msgCh, c.name, err)
 				}
 				_ = c.conn.Close()
+
 				c.exit()
 				return
 			}
@@ -339,8 +351,8 @@ func (c *clientConn) handleNetRecv() {
 		if err != nil {
 			c.parent.log.e("NET connection broken, server =", c.name, "err =", err)
 
-			// TODO send proper net error to net handler
 			// exit client connection
+			notifyNetMsg(c.parent.msgCh, c.name, err)
 			c.exit()
 			return
 		}
