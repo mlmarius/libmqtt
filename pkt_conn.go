@@ -256,7 +256,7 @@ type ConnProps struct {
 	// If Authentication Method is absent, extended authentication is not performed.
 	//
 	// If a Client sets an Authentication Method in the ConnPacket,
-	// the Client MUST NOT send any packets other than AuthPacket or DisConn packets
+	// the Client MUST NOT send any packets other than AuthPacket or Disconn packets
 	// until it has received a ConnAck packet
 	AuthMethod string
 
@@ -582,9 +582,9 @@ type DisconnPacket struct {
 	Props *DisconnProps
 }
 
-// Type of DisconnPacket is CtrlDisConn
+// Type of DisconnPacket is CtrlDisconn
 func (d *DisconnPacket) Type() CtrlType {
-	return CtrlDisConn
+	return CtrlDisconn
 }
 
 func (d *DisconnPacket) Bytes() []byte {
@@ -608,10 +608,10 @@ func (d *DisconnPacket) WriteTo(w BufferedWriter) error {
 
 	switch d.Version() {
 	case V311:
-		_, err = w.Write([]byte{CtrlDisConn << 4, 0})
+		_, err = w.Write([]byte{CtrlDisconn << 4, 0})
 		return err
 	case V5:
-		return d.writeV5(w, CtrlDisConn<<4, nil, d.Props.props(), nil)
+		return d.writeV5(w, CtrlDisconn<<4, nil, d.Props.props(), nil)
 	default:
 		return ErrUnsupportedVersion
 	}
@@ -619,7 +619,7 @@ func (d *DisconnPacket) WriteTo(w BufferedWriter) error {
 
 type DisConnProps = DisconnPacket
 
-// DisConnProps properties for DisconnPacket
+// DisconnProps properties for DisconnPacket
 type DisconnProps struct {
 	// Session Expiry Interval in seconds
 	// If the Session Expiry Interval is absent, the Session Expiry Interval in the CONNECT packet is used

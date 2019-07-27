@@ -29,7 +29,7 @@ func TestNotifyMsg(t *testing.T) {
 		notifyPersistMsg(msgCh, nil, testErr)
 		notifyPubMsg(msgCh, "test topic", testErr)
 		notifySubMsg(msgCh, []*Topic{}, testErr)
-		notifyUnSubMsg(msgCh, []string{}, testErr)
+		notifyUnsubMsg(msgCh, []string{}, testErr)
 
 		close(msgCh)
 	}()

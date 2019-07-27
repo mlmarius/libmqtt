@@ -27,7 +27,7 @@ type extraHandler struct {
 	afterConnSuccess  func(client Client)
 	afterPubSuccess   func(client Client)
 	afterSubSuccess   func(client Client)
-	afterUnSubSuccess func(client Client)
+	afterUnsubSuccess func(client Client)
 }
 
 func testTLSOption() Option {
@@ -85,15 +85,15 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 			}
 		}),
 		WithUnsubHandleFunc(func(client Client, topics []string, err error) {
-			println("exH.UnSub")
+			println("exH.Unsub")
 			if err != nil {
 				t.Error(err)
 				t.FailNow()
 			}
 
-			if handler != nil && handler.afterUnSubSuccess != nil {
-				println("afterUnSubSuccess()")
-				handler.afterUnSubSuccess(c)
+			if handler != nil && handler.afterUnsubSuccess != nil {
+				println("afterUnsubSuccess()")
+				handler.afterUnsubSuccess(c)
 			}
 		}),
 		WithNetHandleFunc(func(client Client, server string, err error) {

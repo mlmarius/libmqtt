@@ -118,7 +118,7 @@ Feature rich modern MQTT library in pure Go
 
    ```go
    // use true for a immediate disconnect to server
-   // use false to send a DisConn packet to server before disconnect
+   // use false to send a Disconn packet to server before disconnect
    client.Destroy(true)
    ```
 

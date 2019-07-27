@@ -88,7 +88,7 @@ func TestClient_Subscribe(t *testing.T) {
 }
 
 // conn -> sub -> pub -> unSub
-func TestClient_UnSubscribe(t *testing.T) {
+func TestClient_Unsubscribe(t *testing.T) {
 	testAllClient(t, &extraHandler{
 		afterConnSuccess: func(c Client) {
 			handleTopicAndSub(c, t)
@@ -96,7 +96,7 @@ func TestClient_UnSubscribe(t *testing.T) {
 		afterSubSuccess: func(c Client) {
 			c.Unsubscribe(testTopics...)
 		},
-		afterUnSubSuccess: func(c Client) {
+		afterUnsubSuccess: func(c Client) {
 			c.Destroy(true)
 		},
 	})

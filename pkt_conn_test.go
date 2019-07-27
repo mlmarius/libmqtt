@@ -94,7 +94,7 @@ var (
 		},
 	}
 
-	testDisConnMsg = &DisconnPacket{
+	testDisconnMsg = &DisconnPacket{
 		BasePacket: BasePacket{ProtoVersion: testProtoVersion},
 		Code:       CodeUnspecifiedError,
 		Props: &DisconnProps{
@@ -104,7 +104,7 @@ var (
 			UserProps:             UserProps{"MQ": []string{"TT"}},
 		},
 	}
-	testDisConnPropsBytes = []byte{
+	testDisconnPropsBytes = []byte{
 		propKeySessionExpiryInterval, 100, 100, 100, 100,
 		propKeyReasonString, 0, 4, 'M', 'Q', 'T', 'T',
 		propKeyServerRef, 0, 4, 'M', 'Q', 'T', 'T',
@@ -115,13 +115,13 @@ var (
 	testConnWillMsgBytesV311 []byte
 	testConnMsgBytesV311     []byte
 	testConnAckMsgBytesV311  []byte
-	testDisConnMsgBytesV311  []byte
+	testDisconnMsgBytesV311  []byte
 
 	// mqtt 5.0
 	testConnWillMsgBytesV5 []byte
 	testConnMsgBytesV5     []byte
 	testConnAckMsgBytesV5  []byte
-	testDisConnMsgBytesV5  []byte
+	testDisconnMsgBytesV5  []byte
 )
 
 func initTestData_Conn() {
@@ -171,9 +171,9 @@ func initTestData_Conn() {
 	disConnPkt := std.NewControlPacket(std.Disconnect).(*std.DisconnectPacket)
 	disConnBuf := new(bytes.Buffer)
 	_ = disConnPkt.Write(disConnBuf)
-	testDisConnMsgBytesV311 = disConnBuf.Bytes()
-	testDisConnMsgBytesV5 = newV5TestPacketBytes(CtrlDisConn, 0,
-		append([]byte{CodeUnspecifiedError}, testDisConnPropsBytes...), nil)
+	testDisconnMsgBytesV311 = disConnBuf.Bytes()
+	testDisconnMsgBytesV5 = newV5TestPacketBytes(CtrlDisconn, 0,
+		append([]byte{CodeUnspecifiedError}, testDisconnPropsBytes...), nil)
 }
 
 func TestConnPacket_Bytes(t *testing.T) {
@@ -210,16 +210,16 @@ func TestConnAckProps_SetProps(t *testing.T) {
 
 }
 
-func TestDisConnPacket_Bytes(t *testing.T) {
-	testPacketBytes(V311, testDisConnMsg, testDisConnMsgBytesV311, t)
+func TestDisconnPacket_Bytes(t *testing.T) {
+	testPacketBytes(V311, testDisconnMsg, testDisconnMsgBytesV311, t)
 	t.Skip("v5")
-	testPacketBytes(V5, testDisConnMsg, testDisConnMsgBytesV5, t)
+	testPacketBytes(V5, testDisconnMsg, testDisconnMsgBytesV5, t)
 }
 
-func TestDisConnProps_Props(t *testing.T) {
+func TestDisconnProps_Props(t *testing.T) {
 
 }
 
-func TestDisConnProps_SetProps(t *testing.T) {
+func TestDisconnProps_SetProps(t *testing.T) {
 
 }

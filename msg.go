@@ -50,7 +50,7 @@ func notifySubMsg(ch chan<- *message, p []*Topic, err error) {
 	}
 }
 
-func notifyUnSubMsg(ch chan<- *message, topics []string, err error) {
+func notifyUnsubMsg(ch chan<- *message, topics []string, err error) {
 	ch <- &message{
 		what: unSubMsg,
 		err:  err,

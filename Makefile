@@ -27,7 +27,7 @@ test_auth:
 
 test_conn:
 	go test ${TEST_FLAGS} -run=TestConn
-	go test ${TEST_FLAGS} -run=TestDisConn
+	go test ${TEST_FLAGS} -run=TestDisconn
 
 test_ping:
 	go test ${TEST_FLAGS} -run=TestPing
@@ -37,7 +37,7 @@ test_pub:
 
 test_sub:
 	go test ${TEST_FLAGS} -run=TestSub
-	go test ${TEST_FLAGS} -run=TestUnSub
+	go test ${TEST_FLAGS} -run=TestUnsub
 
 .PHONY: all_lib c_lib java_lib py_lib \
 		clean_c_lib clean_java_lib clean_py_lib

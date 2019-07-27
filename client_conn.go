@@ -96,14 +96,14 @@ func (c *clientConn) logic() {
 				}
 			case *UnsubAckPacket:
 				p := pkt.(*UnsubAckPacket)
-				c.parent.log.v("NET received UnSubAck, id =", p.PacketID)
+				c.parent.log.v("NET received UnsubAck, id =", p.PacketID)
 
 				if originPkt, ok := c.parent.idGen.getExtra(p.PacketID); ok {
 					switch originPkt.(type) {
 					case *UnsubPacket:
-						originUnSub := originPkt.(*UnsubPacket)
-						c.parent.log.d("NET unsubscribed topics", originUnSub.TopicNames)
-						notifyUnSubMsg(c.parent.msgCh, originUnSub.TopicNames, nil)
+						originUnsub := originPkt.(*UnsubPacket)
+						c.parent.log.d("NET unsubscribed topics", originUnsub.TopicNames)
+						notifyUnsubMsg(c.parent.msgCh, originUnsub.TopicNames, nil)
 						c.parent.idGen.free(p.PacketID)
 
 						notifyPersistMsg(c.parent.msgCh, p, c.parent.persist.Delete(sendKey(p.PacketID)))

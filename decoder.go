@@ -48,7 +48,7 @@ func Decode(version ProtoVersion, r BufferedReader) (Packet, error) {
 			return PingReqPacket, nil
 		case CtrlPingResp:
 			return PingRespPacket, nil
-		case CtrlDisConn:
+		case CtrlDisconn:
 			if version == V311 {
 				return &DisconnPacket{}, nil
 			} else {
@@ -188,7 +188,7 @@ func decodeV311Packet(header byte, body []byte) (Packet, error) {
 			pkt.Codes = append(pkt.Codes, body[i])
 		}
 		return pkt, nil
-	case CtrlUnSub:
+	case CtrlUnsub:
 		pkt := &UnsubPacket{PacketID: getUint16(body)}
 
 		body = body[2:]
@@ -201,7 +201,7 @@ func decodeV311Packet(header byte, body []byte) (Packet, error) {
 			pkt.TopicNames = append(pkt.TopicNames, name)
 		}
 		return pkt, nil
-	case CtrlUnSubAck:
+	case CtrlUnsubAck:
 		return &UnsubAckPacket{PacketID: getUint16(body)}, nil
 	}
 
@@ -433,7 +433,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		}
 		pkt.ProtoVersion = V5
 		return pkt, nil
-	case CtrlUnSub:
+	case CtrlUnsub:
 		pkt := &UnsubPacket{
 			PacketID: getUint16(body),
 			Props:    &UnsubProps{},
@@ -455,7 +455,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		}
 		pkt.ProtoVersion = V5
 		return pkt, nil
-	case CtrlUnSubAck:
+	case CtrlUnsubAck:
 		pkt := &UnsubAckPacket{
 			PacketID: getUint16(body),
 			Props:    &UnsubAckProps{},
@@ -468,7 +468,7 @@ func decodeV5Packet(header byte, body []byte) (Packet, error) {
 		pkt.Props.setProps(props)
 		pkt.ProtoVersion = V5
 		return pkt, nil
-	case CtrlDisConn:
+	case CtrlDisconn:
 		pkt := &DisconnPacket{
 			Code:  body[0],
 			Props: &DisconnProps{},

@@ -217,9 +217,9 @@ type UnsubPacket struct {
 	Props      *UnsubProps
 }
 
-// Type of UnsubPacket is CtrlUnSub
+// Type of UnsubPacket is CtrlUnsub
 func (s *UnsubPacket) Type() CtrlType {
-	return CtrlUnSub
+	return CtrlUnsub
 }
 
 func (s *UnsubPacket) Bytes() []byte {
@@ -237,7 +237,7 @@ func (s *UnsubPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	const first = CtrlUnSub<<4 | 0x02
+	const first = CtrlUnsub<<4 | 0x02
 	varHeader := []byte{byte(s.PacketID >> 8), byte(s.PacketID)}
 	switch s.Version() {
 	case V311:
@@ -299,9 +299,9 @@ type UnsubAckPacket struct {
 	Props    *UnsubAckProps
 }
 
-// Type of UnsubAckPacket is CtrlUnSubAck
+// Type of UnsubAckPacket is CtrlUnsubAck
 func (s *UnsubAckPacket) Type() CtrlType {
-	return CtrlUnSubAck
+	return CtrlUnsubAck
 }
 
 func (s *UnsubAckPacket) Bytes() []byte {
@@ -319,7 +319,7 @@ func (s *UnsubAckPacket) WriteTo(w BufferedWriter) error {
 		return ErrEncodeBadPacket
 	}
 
-	const first = CtrlUnSubAck << 4
+	const first = CtrlUnsubAck << 4
 	varHeader := []byte{byte(s.PacketID >> 8), byte(s.PacketID)}
 	switch s.Version() {
 	case V311:

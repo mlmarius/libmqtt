@@ -256,12 +256,21 @@ const (
 	CtrlPubComp   CtrlType = 7  // publish complete
 	CtrlSubscribe CtrlType = 8  // subscribe
 	CtrlSubAck    CtrlType = 9  // subscribe ack
-	CtrlUnSub     CtrlType = 10 // unsubscribe
-	CtrlUnSubAck  CtrlType = 11 // unsubscribe ack
+	CtrlUnsub     CtrlType = 10 // unsubscribe
+	CtrlUnsubAck  CtrlType = 11 // unsubscribe ack
 	CtrlPingReq   CtrlType = 12 // ping request
 	CtrlPingResp  CtrlType = 13 // ping response
-	CtrlDisConn   CtrlType = 14 // disconnect
+	CtrlDisconn   CtrlType = 14 // disconnect
 	CtrlAuth      CtrlType = 15 // authentication (since MQTT 5)
+)
+
+const (
+	// Deprecated: use CtrlUnsub instead, will be removed in v1.0
+	CtrlUnSub = CtrlUnsub
+	// Deprecated: use CtrlUnsubAck instead, will be removed in v1.0
+	CtrlUnSubAck = CtrlUnsubAck
+	// Deprecated: use CtrlDisconn instead, will be removed in v1.0
+	CtrlDisConn = CtrlDisconn
 )
 
 // ProtoVersion MQTT Protocol ProtoVersion
@@ -304,51 +313,51 @@ const (
 )
 
 const (
-	CodeSuccess                             = 0   // Packet: ConnAck, PubAck, PubRecv, PubRel, PubComp, UnSubAck, Auth
-	CodeNormalDisconn                       = 0   // Packet: DisConn
+	CodeSuccess                             = 0   // Packet: ConnAck, PubAck, PubRecv, PubRel, PubComp, UnsubAck, Auth
+	CodeNormalDisconn                       = 0   // Packet: Disconn
 	CodeGrantedQos0                         = 0   // Packet: SubAck
 	CodeGrantedQos1                         = 1   // Packet: SubAck
 	CodeGrantedQos2                         = 2   // Packet: SubAck
-	CodeDisconnWithWill                     = 4   // Packet: DisConn
+	CodeDisconnWithWill                     = 4   // Packet: Disconn
 	CodeNoMatchingSubscribers               = 16  // Packet: PubAck, PubRecv
-	CodeNoSubscriptionExisted               = 17  // Packet: UnSubAck
+	CodeNoSubscriptionExisted               = 17  // Packet: UnsubAck
 	CodeContinueAuth                        = 24  // Packet: Auth
 	CodeReAuth                              = 25  // Packet: Auth
-	CodeUnspecifiedError                    = 128 // Packet: ConnAck, PubAck, PubRecv, SubAck, UnSubAck, DisConn
-	CodeMalformedPacket                     = 129 // Packet: ConnAck, DisConn
-	CodeProtoError                          = 130 // Packet: ConnAck, DisConn
-	CodeImplementationSpecificError         = 131 // Packet: ConnAck, PubAck, PubRecv, SubAck, UnSubAck, DisConn
+	CodeUnspecifiedError                    = 128 // Packet: ConnAck, PubAck, PubRecv, SubAck, UnsubAck, Disconn
+	CodeMalformedPacket                     = 129 // Packet: ConnAck, Disconn
+	CodeProtoError                          = 130 // Packet: ConnAck, Disconn
+	CodeImplementationSpecificError         = 131 // Packet: ConnAck, PubAck, PubRecv, SubAck, UnsubAck, Disconn
 	CodeUnsupportedProtoVersion             = 132 // Packet: ConnAck
 	CodeClientIdNotValid                    = 133 // Packet: ConnAck
 	CodeBadUserPass                         = 134 // Packet: ConnAck
-	CodeNotAuthorized                       = 135 // Packet: ConnAck, PubAck, PubRecv, SubAck, UnSubAck, DisConn
+	CodeNotAuthorized                       = 135 // Packet: ConnAck, PubAck, PubRecv, SubAck, UnsubAck, Disconn
 	CodeServerUnavail                       = 136 // Packet: ConnAck
-	CodeServerBusy                          = 137 // Packet: ConnAck, DisConn
+	CodeServerBusy                          = 137 // Packet: ConnAck, Disconn
 	CodeBanned                              = 138 // Packet: ConnAck
-	CodeServerShuttingDown                  = 139 // Packet: DisConn
-	CodeBadAuthenticationMethod             = 140 // Packet: ConnAck, DisConn
-	CodeKeepaliveTimeout                    = 141 // Packet: DisConn
-	CodeSessionTakenOver                    = 142 // Packet: DisConn
-	CodeTopicFilterInvalid                  = 143 // Packet: SubAck, UnSubAck, DisConn
-	CodeTopicNameInvalid                    = 144 // Packet: ConnAck, PubAck, PubRecv, DisConn
-	CodePacketIdentifierInUse               = 145 // Packet: PubAck, PubRecv, PubAck, UnSubAck
+	CodeServerShuttingDown                  = 139 // Packet: Disconn
+	CodeBadAuthenticationMethod             = 140 // Packet: ConnAck, Disconn
+	CodeKeepaliveTimeout                    = 141 // Packet: Disconn
+	CodeSessionTakenOver                    = 142 // Packet: Disconn
+	CodeTopicFilterInvalid                  = 143 // Packet: SubAck, UnsubAck, Disconn
+	CodeTopicNameInvalid                    = 144 // Packet: ConnAck, PubAck, PubRecv, Disconn
+	CodePacketIdentifierInUse               = 145 // Packet: PubAck, PubRecv, PubAck, UnsubAck
 	CodePacketIdentifierNotFound            = 146 // Packet: PubRel, PubComp
-	CodeReceiveMaxExceeded                  = 147 // Packet: DisConn
-	CodeTopicAliasInvalid                   = 148 // Packet: DisConn
-	CodePacketTooLarge                      = 149 // Packet: ConnAck, DisConn
-	CodeMessageRateTooHigh                  = 150 // Packet: DisConn
-	CodeQuotaExceeded                       = 151 // Packet: ConnAck, PubAck, PubRec, SubAck, DisConn
-	CodeAdministrativeAction                = 152 // Packet: DisConn
-	CodePayloadFormatInvalid                = 153 // Packet: ConnAck, PubAck, PubRecv, DisConn
-	CodeRetainNotSupported                  = 154 // Packet: ConnAck, DisConn
-	CodeQosNoSupported                      = 155 // Packet: ConnAck, DisConn
-	CodeUseAnotherServer                    = 156 // Packet: ConnAck, DisConn
-	CodeServerMoved                         = 157 // Packet: ConnAck, DisConn
-	CodeSharedSubscriptionNotSupported      = 158 // Packet: SubAck, DisConn
-	CodeConnectionRateExceeded              = 159 // Packet: ConnAck, DisConn
-	CodeMaxConnectTime                      = 160 // Packet: DisConn
-	CodeSubscriptionIdentifiersNotSupported = 161 // Packet: SubAck, DisConn
-	CodeWildcardSubscriptionNotSupported    = 162 // Packet: SubAck, DisConn
+	CodeReceiveMaxExceeded                  = 147 // Packet: Disconn
+	CodeTopicAliasInvalid                   = 148 // Packet: Disconn
+	CodePacketTooLarge                      = 149 // Packet: ConnAck, Disconn
+	CodeMessageRateTooHigh                  = 150 // Packet: Disconn
+	CodeQuotaExceeded                       = 151 // Packet: ConnAck, PubAck, PubRec, SubAck, Disconn
+	CodeAdministrativeAction                = 152 // Packet: Disconn
+	CodePayloadFormatInvalid                = 153 // Packet: ConnAck, PubAck, PubRecv, Disconn
+	CodeRetainNotSupported                  = 154 // Packet: ConnAck, Disconn
+	CodeQosNoSupported                      = 155 // Packet: ConnAck, Disconn
+	CodeUseAnotherServer                    = 156 // Packet: ConnAck, Disconn
+	CodeServerMoved                         = 157 // Packet: ConnAck, Disconn
+	CodeSharedSubscriptionNotSupported      = 158 // Packet: SubAck, Disconn
+	CodeConnectionRateExceeded              = 159 // Packet: ConnAck, Disconn
+	CodeMaxConnectTime                      = 160 // Packet: Disconn
+	CodeSubscriptionIdentifiersNotSupported = 161 // Packet: SubAck, Disconn
+	CodeWildcardSubscriptionNotSupported    = 162 // Packet: SubAck, Disconn
 )
 
 // property identifiers
@@ -360,7 +369,7 @@ const (
 	propKeyRespTopic              = 8  // utf-8, Packet: Will, Publish
 	propKeyCorrelationData        = 9  // binary data, Packet: Will, Publish
 	propKeySubID                  = 11 // uint (variable bytes), Packet: Publish, Subscribe
-	propKeySessionExpiryInterval  = 17 // uint (4 bytes), Packet: Connect, ConnAck, DisConn\
+	propKeySessionExpiryInterval  = 17 // uint (4 bytes), Packet: Connect, ConnAck, Disconn\
 	propKeyAssignedClientID       = 18 // utf-8, Packet: ConnAck
 	propKeyServerKeepalive        = 19 // uint (2 bytes), Packet: ConnAck
 	propKeyAuthMethod             = 21 // utf-8, Packet: Connect, ConnAck, Auth
@@ -369,14 +378,14 @@ const (
 	propKeyWillDelayInterval      = 24 // uint (4 bytes), Packet: Will
 	propKeyReqRespInfo            = 25 // byte, Packet: Connect
 	propKeyRespInfo               = 26 // utf-8, Packet: ConnAck
-	propKeyServerRef              = 28 // utf-8, Packet: ConnAck, DisConn
-	propKeyReasonString           = 31 // utf-8, Packet: ConnAck, PubAck, PubRecv, PubRel, PubComp, SubAck, UnSubAck, DisConn, Auth
+	propKeyServerRef              = 28 // utf-8, Packet: ConnAck, Disconn
+	propKeyReasonString           = 31 // utf-8, Packet: ConnAck, PubAck, PubRecv, PubRel, PubComp, SubAck, UnsubAck, Disconn, Auth
 	propKeyMaxRecv                = 33 // uint (2 bytes), Packet: Connect, ConnAck
 	propKeyMaxTopicAlias          = 34 // uint (2 bytes), Packet: Connect, ConnAck
 	propKeyTopicAlias             = 35 // uint (2 bytes), Packet: Publish
 	propKeyMaxQos                 = 36 // byte, Packet: ConnAck
 	propKeyRetainAvail            = 37 // byte, Packet: ConnAck
-	propKeyUserProps              = 38 // utf-8 string pair, Packet: Connect, ConnAck, Publish, Will, PubAck, PubRecv, PubRel, PubComp, Subscribe, SubAck, UnSub, UnSubAck, DisConn, Auth
+	propKeyUserProps              = 38 // utf-8 string pair, Packet: Connect, ConnAck, Publish, Will, PubAck, PubRecv, PubRel, PubComp, Subscribe, SubAck, Unsub, UnsubAck, Disconn, Auth
 	propKeyMaxPacketSize          = 39 // uint (4 bytes), Packet: Connect, ConnAck
 	propKeyWildcardSubAvail       = 40 // byte, Packet: ConnAck
 	propKeySubIDAvail             = 41 // byte, Packet: ConnAck
