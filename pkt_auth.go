@@ -67,13 +67,12 @@ func (a *AuthProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
 	p := propertySet{}
 	p.set(propKeyAuthMethod, a.AuthMethod)
 	p.set(propKeyAuthData, a.AuthData)
 	p.set(propKeyReasonString, a.Reason)
 	p.set(propKeyUserProps, a.UserProps)
-	return result
+	return p.bytes()
 }
 
 func (a *AuthProps) setProps(props map[byte][]byte) {

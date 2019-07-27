@@ -95,7 +95,7 @@ func (p propertySet) del(propKey byte) {
 }
 
 func (p propertySet) bytes() []byte {
-	ret := make([]byte, 0)
+	var ret []byte
 	for propKey, propValue := range p {
 		for _, v := range propValue {
 			ret = append(ret, propKey)

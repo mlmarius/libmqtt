@@ -127,7 +127,7 @@ func (c *ConnPacket) clone() *ConnPacket {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	willMessageCopy := make([]byte, 0, len(c.WillMessage))
+	willMessageCopy := make([]byte, len(c.WillMessage))
 	_ = copy(willMessageCopy, c.WillMessage)
 
 	return &ConnPacket{
@@ -291,7 +291,7 @@ func (c *ConnProps) clone() *ConnProps {
 	c.mu.RUnlock()
 	defer c.mu.RUnlock()
 
-	authDataCopy := make([]byte, 0, len(c.AuthData))
+	authDataCopy := make([]byte, len(c.AuthData))
 	_ = copy(authDataCopy, c.AuthData)
 
 	userPropsCopy := make(UserProps)

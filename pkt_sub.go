@@ -89,8 +89,7 @@ func (s *SubscribeProps) props() []byte {
 		return nil
 	}
 
-	result := make([]byte, 0)
-
+	var result []byte
 	if s.SubID != 0 {
 		subIDBytes, _ := varIntBytes(s.SubID)
 		result = append(result, propKeySubID)
@@ -251,7 +250,7 @@ func (s *UnsubPacket) WriteTo(w BufferedWriter) error {
 }
 
 func (s *UnsubPacket) payload() []byte {
-	result := make([]byte, 0)
+	var result []byte
 	if s.TopicNames != nil {
 		for _, t := range s.TopicNames {
 			result = append(result, encodeStringWithLen(t)...)
