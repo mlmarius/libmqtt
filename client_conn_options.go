@@ -196,7 +196,7 @@ reconnect:
 			reconnectDelay = c.maxDelay
 		}
 
-		parent.addWorker(func() { c.connect(parent, server, version-1, reconnectDelay) })
+		parent.addWorker(func() { c.connect(parent, server, version, reconnectDelay) })
 	case <-parent.stopSig:
 		return
 	}
