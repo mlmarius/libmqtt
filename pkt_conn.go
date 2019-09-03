@@ -116,7 +116,7 @@ func (c *ConnPacket) WriteTo(w BufferedWriter) error {
 	case V311:
 		return c.write(w, first, varHeader, c.payload())
 	case V5:
-		varHeader[4] = byte(V5)
+		varHeader[6] = byte(V5)
 		return c.writeV5(w, first, varHeader, c.Props.props(), c.payload())
 	default:
 		return ErrUnsupportedVersion
