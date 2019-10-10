@@ -295,6 +295,15 @@ const (
 // reason code
 
 const (
+	// MQTT 3.1.1 ConnAck code
+	CodeUnacceptableVersion   = 1 // Packet: ConnAck
+	CodeIdentifierRejected    = 2 // Packet: ConnAck
+	CodeServerUnavailable     = 3 // Packet: ConnAck
+	CodeBadUsernameOrPassword = 4 // Packet: ConnAck
+	CodeUnauthorized          = 5 // Packet: ConnAck
+)
+
+const (
 	CodeSuccess                             = 0   // Packet: ConnAck, PubAck, PubRecv, PubRel, PubComp, UnSubAck, Auth
 	CodeNormalDisconn                       = 0   // Packet: DisConn
 	CodeGrantedQos0                         = 0   // Packet: SubAck

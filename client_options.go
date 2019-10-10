@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"time"
@@ -173,6 +174,11 @@ func WithIdentity(username, password string) Option {
 // WithKeepalive set the keepalive interval (time in second)
 func WithKeepalive(keepalive uint16, factor float64) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
+		if keepalive <= 0 {
+			return fmt.Errorf("keepalive provided must be greater than 0")
+		}
+
+		options.connPacket.Keepalive = keepalive
 		options.keepalive = time.Duration(keepalive) * time.Second
 		if factor > 1 {
 			options.keepaliveFactor = factor
@@ -354,6 +360,10 @@ func WithRouter(r TopicRouter) Option {
 func WithConnPacket(pkt ConnPacket) Option {
 	return func(c *AsyncClient, options *connectOptions) error {
 		options.connPacket = &pkt
+
+		if pkt.Keepalive > 0 {
+			options.keepalive = time.Duration(pkt.Keepalive) * time.Second
+		}
 		return nil
 	}
 }
