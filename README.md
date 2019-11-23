@@ -1,6 +1,6 @@
 # libmqtt
 
-[![Build Status](https://travis-ci.org/goiiot/libmqtt.svg)](https://travis-ci.org/goiiot/libmqtt) [![GoDoc](https://godoc.org/github.com/goiiot/libmqtt?status.svg)](https://godoc.org/github.com/goiiot/libmqtt) [![GoReportCard](https://goreportcard.com/badge/goiiot/libmqtt)](https://goreportcard.com/report/github.com/goiiot/libmqtt) [![codecov](https://codecov.io/gh/goiiot/libmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/goiiot/libmqtt)
+[![Build Status](https://api.travis-ci.com/goiiot/libmqtt.svg?branch=master)](https://travis-ci.com/goiiot/libmqtt) [![GoDoc](https://godoc.org/github.com/goiiot/libmqtt?status.svg)](https://godoc.org/github.com/goiiot/libmqtt) [![GoReportCard](https://goreportcard.com/badge/goiiot/libmqtt)](https://goreportcard.com/report/github.com/goiiot/libmqtt) [![codecov](https://codecov.io/gh/goiiot/libmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/goiiot/libmqtt)
 
 Feature rich modern MQTT library in pure Go, for `Go`, `C/C++`, `Java`
 
