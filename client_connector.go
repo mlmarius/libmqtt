@@ -174,46 +174,6 @@ func (c *wsConn) SetWriteDeadline(t time.Time) error {
 	return errNotSupported
 }
 
-func websocketConnect(ctx context.Context, address string, dialTimeout, handShakeTimeout time.Duration, headers http.Header, tlsConfig *tls.Config) (net.Conn, error) {
-	netDialer := &net.Dialer{
-		Timeout: dialTimeout,
-	}
-
-	urlSchema := "ws"
-	if tlsConfig != nil {
-		urlSchema = "wss"
-	}
-
-	conn, _, err := websocket.Dial(ctx, urlSchema+"://"+address, &websocket.DialOptions{
-		HTTPHeader:   headers,
-		Subprotocols: []string{"mqtt"},
-		HTTPClient: &http.Client{
-			Transport: &http.Transport{
-				Proxy:               http.ProxyFromEnvironment,
-				DialContext:         netDialer.DialContext,
-				TLSHandshakeTimeout: handShakeTimeout,
-				TLSClientConfig:     tlsConfig,
-				ForceAttemptHTTP2:   true,
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// best effort
-	emptyAddr := new(net.TCPAddr)
-
-	return &wsConn{
-		ctx:     ctx,
-		conn:    conn,
-		readBuf: new(bytes.Buffer),
-
-		localAddr:  emptyAddr,
-		remoteAddr: emptyAddr,
-	}, nil
-}
-
 func quicConnector(address string, timeout, handshakeTimeout time.Duration, tlsConfig *tls.Config) (net.Conn, error) {
 	// TODO: TBD
 	return nil, nil
