@@ -20,12 +20,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"nhooyr.io/websocket"
 )
 
 type Connector func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (net.Conn, error)
@@ -118,47 +119,59 @@ func tcpConnect(ctx context.Context, address string, timeout, handshakeTimeout t
 	return conn, err
 }
 
+var errNotSupported = errors.New("operation not supported")
+
 type wsConn struct {
-	conn    *websocket.Conn
-	readBuf bytes.Buffer
+	ctx  context.Context
+	conn *websocket.Conn
+
+	localAddr  net.Addr
+	remoteAddr net.Addr
+
+	readBuf *bytes.Buffer
 }
 
 func (c *wsConn) Read(b []byte) (int, error) {
-	_, data, err := c.conn.ReadMessage()
+	_, data, err := c.conn.Read(c.ctx)
 	if err != nil {
 		return 0, err
 	}
-	return copy(b, data), err
+
+	c.readBuf.Write(data)
+	return c.readBuf.Read(b)
 }
 
-func (c *wsConn) Write(b []byte) (n int, err error) {
-	n = len(b)
-	err = c.conn.WriteMessage(websocket.BinaryMessage, b)
-	return
+func (c *wsConn) Write(b []byte) (int, error) {
+	err := c.conn.Write(c.ctx, websocket.MessageBinary, b)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(b), nil
 }
 
 func (c *wsConn) Close() error {
-	return c.conn.Close()
+	return c.conn.Close(websocket.StatusGoingAway, "")
 }
 
 func (c *wsConn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
+	return c.localAddr
 }
 
 func (c *wsConn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+	return c.remoteAddr
 }
 
 func (c *wsConn) SetDeadline(t time.Time) error {
-	return c.conn.UnderlyingConn().SetDeadline(t)
+	return errNotSupported
 }
 
 func (c *wsConn) SetReadDeadline(t time.Time) error {
-	return c.conn.SetReadDeadline(t)
+	return errNotSupported
 }
 
 func (c *wsConn) SetWriteDeadline(t time.Time) error {
-	return c.conn.SetWriteDeadline(t)
+	return errNotSupported
 }
 
 func websocketConnect(ctx context.Context, address string, dialTimeout, handShakeTimeout time.Duration, headers http.Header, tlsConfig *tls.Config) (net.Conn, error) {
@@ -166,26 +179,39 @@ func websocketConnect(ctx context.Context, address string, dialTimeout, handShak
 		Timeout: dialTimeout,
 	}
 
-	dialer := &websocket.Dialer{
-		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: handShakeTimeout,
-		NetDial:          netDialer.Dial,
-		NetDialContext:   netDialer.DialContext,
-		TLSClientConfig:  tlsConfig,
-		Subprotocols:     []string{"mqtt"},
-	}
-
 	urlSchema := "ws"
 	if tlsConfig != nil {
 		urlSchema = "wss"
 	}
 
-	conn, _, err := dialer.DialContext(ctx, urlSchema+"://"+address, headers)
+	conn, _, err := websocket.Dial(ctx, urlSchema+"://"+address, &websocket.DialOptions{
+		HTTPHeader:   headers,
+		Subprotocols: []string{"mqtt"},
+		HTTPClient: &http.Client{
+			Transport: &http.Transport{
+				Proxy:               http.ProxyFromEnvironment,
+				DialContext:         netDialer.DialContext,
+				TLSHandshakeTimeout: handShakeTimeout,
+				TLSClientConfig:     tlsConfig,
+				ForceAttemptHTTP2:   true,
+			},
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &wsConn{conn: conn}, nil
+	// best effort
+	emptyAddr := new(net.TCPAddr)
+
+	return &wsConn{
+		ctx:     ctx,
+		conn:    conn,
+		readBuf: new(bytes.Buffer),
+
+		localAddr:  emptyAddr,
+		remoteAddr: emptyAddr,
+	}, nil
 }
 
 func quicConnector(address string, timeout, handshakeTimeout time.Duration, tlsConfig *tls.Config) (net.Conn, error) {
