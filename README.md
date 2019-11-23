@@ -17,11 +17,11 @@ Feature rich modern MQTT library in pure Go, for `Go`, `C/C++`, `Java`
 ## Features
 
 1. MQTT v3.1.1/v5.0 client support (async only)
-1. High performance and less memory footprint (see [Benchmark](#benchmark))
-1. Customizable topic routing (see [Topic Routing](#topic-routing))
-1. Multiple Builtin session persist methods (see [Session Persist](#session-persist))
-1. [C/C++ lib](./c/), [Java lib](./java/), [Command line client](./cmd/) support
-1. Idiomatic Go
+2. High performance and less memory footprint (see [Benchmark](#benchmark))
+3. Customizable topic routing (see [Topic Routing](#topic-routing))
+4. Multiple Builtin session persist methods (see [Session Persist](#session-persist))
+5. [C/C++ lib](./c/), [Java lib](./java/), [Command line client](./cmd/) support
+6. Idiomatic Go
 
 ## Usage
 
