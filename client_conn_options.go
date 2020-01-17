@@ -139,6 +139,10 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 					parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
 				close(connImpl.logicSendC)
+
+				if c.autoReconnect && !parent.isClosing() {
+					goto reconnect
+				}
 				return
 			}
 
@@ -157,6 +161,10 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 					if c.connHandler != nil {
 						parent.addWorker(func() { c.connHandler(parent, server, p.Code, nil) })
 					}
+
+					if c.autoReconnect && !parent.isClosing() {
+						goto reconnect
+					}
 					return
 				}
 			default:
@@ -164,9 +172,16 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 				if c.connHandler != nil {
 					parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
+
+				if c.autoReconnect && !parent.isClosing() {
+					goto reconnect
+				}
 				return
 			}
 		case <-connImpl.stopSig:
+			if c.autoReconnect && !parent.isClosing() {
+				goto reconnect
+			}
 			return
 		}
 
