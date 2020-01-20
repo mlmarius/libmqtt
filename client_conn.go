@@ -385,3 +385,20 @@ func (c *clientConn) send(pkt Packet) {
 	case <-c.stopSig:
 	}
 }
+
+// send mqtt logic packet before handleSend() is started
+func (c *clientConn) sendRaw(pkt Packet) error {
+	if err := pkt.WriteTo(c.connRW); err != nil {
+		c.parent.log.e("NET encode error", err)
+		return err
+	}
+
+	if err := c.connRW.Flush(); err != nil {
+		c.parent.log.e("NET flush error", err)
+		notifyNetMsg(c.parent.msgCh, c.name, err)
+
+		return err
+	}
+
+	return nil
+}

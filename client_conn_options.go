@@ -126,11 +126,16 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 		connImpl.ctx, connImpl.exit = context.WithCancel(parent.ctx)
 		connImpl.stopSig = connImpl.ctx.Done()
 
-		parent.addWorker(connImpl.handleSend, connImpl.handleNetRecv)
+		parent.addWorker(connImpl.handleNetRecv)
 
 		connPkt := c.connPacket.clone()
 		connPkt.ProtoVersion = version
-		connImpl.send(connPkt)
+		if err := connImpl.sendRaw(connPkt); err != nil {
+			if c.autoReconnect && !parent.isClosing() {
+				goto reconnect
+			}
+			return
+		}
 
 		select {
 		case pkt, more := <-connImpl.netRecvC:
@@ -189,6 +194,8 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 		if c.connHandler != nil {
 			parent.addWorker(func() { c.connHandler(parent, server, CodeSuccess, nil) })
 		}
+
+		parent.addWorker(connImpl.handleSend)
 
 		// start mqtt logic
 		connImpl.logic()
