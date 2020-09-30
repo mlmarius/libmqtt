@@ -126,11 +126,16 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 		connImpl.ctx, connImpl.exit = context.WithCancel(parent.ctx)
 		connImpl.stopSig = connImpl.ctx.Done()
 
-		parent.addWorker(connImpl.handleSend, connImpl.handleNetRecv)
+		parent.addWorker(connImpl.handleNetRecv)
 
 		connPkt := c.connPacket.clone()
 		connPkt.ProtoVersion = version
-		connImpl.send(connPkt)
+		if err := connImpl.sendRaw(connPkt); err != nil {
+			if c.autoReconnect && !parent.isClosing() {
+				goto reconnect
+			}
+			return
+		}
 
 		select {
 		case pkt, more := <-connImpl.netRecvC:
@@ -139,6 +144,10 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 					parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
 				close(connImpl.logicSendC)
+
+				if c.autoReconnect && !parent.isClosing() {
+					goto reconnect
+				}
 				return
 			}
 
@@ -157,6 +166,10 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 					if c.connHandler != nil {
 						parent.addWorker(func() { c.connHandler(parent, server, p.Code, nil) })
 					}
+
+					if c.autoReconnect && !parent.isClosing() {
+						goto reconnect
+					}
 					return
 				}
 			default:
@@ -164,9 +177,16 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 				if c.connHandler != nil {
 					parent.addWorker(func() { c.connHandler(parent, server, math.MaxUint8, ErrDecodeBadPacket) })
 				}
+
+				if c.autoReconnect && !parent.isClosing() {
+					goto reconnect
+				}
 				return
 			}
 		case <-connImpl.stopSig:
+			if c.autoReconnect && !parent.isClosing() {
+				goto reconnect
+			}
 			return
 		}
 
@@ -174,6 +194,8 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 		if c.connHandler != nil {
 			parent.addWorker(func() { c.connHandler(parent, server, CodeSuccess, nil) })
 		}
+
+		parent.addWorker(connImpl.handleSend)
 
 		// start mqtt logic
 		connImpl.logic()
