@@ -51,13 +51,11 @@ func testPersist(p PersistMethod, t *testing.T) {
 
 	if v, ok := p.Load(testPersistKeys[0]); !ok {
 		t.Error("load persisted packet fail, packet =", v)
-	} else {
-		if v.Type() == CtrlSubscribe {
-			if v.(*SubscribePacket).Topics[0].Name !=
-				testPersistPackets[0].(*SubscribePacket).Topics[0].Name {
-				t.Error("source topic name =", v.(*SubscribePacket).Topics[0].Name,
-					"target topic name =", testPersistPackets[0].(*SubscribePacket).Topics[0].Name)
-			}
+	} else if v.Type() == CtrlSubscribe {
+		if v.(*SubscribePacket).Topics[0].Name !=
+			testPersistPackets[0].(*SubscribePacket).Topics[0].Name {
+			t.Error("source topic name =", v.(*SubscribePacket).Topics[0].Name,
+				"target topic name =", testPersistPackets[0].(*SubscribePacket).Topics[0].Name)
 		}
 	}
 }
@@ -91,7 +89,7 @@ func TestFilePersist(t *testing.T) {
 	p := tmp.(*filePersist)
 
 	for i, k := range testPersistKeys {
-		if err := p.Store(k, testPersistPackets[i]); err != nil {
+		if err = p.Store(k, testPersistPackets[i]); err != nil {
 			if err != ErrPacketDroppedByStrategy {
 				t.Error(err)
 			}

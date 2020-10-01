@@ -36,6 +36,7 @@ var (
 		AuthMethod:            "MQTT",
 		AuthData:              []byte("MQTT"),
 	}
+	// nolint:deadcode,varcheck,unused
 	testConnPropsBytes = []byte{
 		propKeySessionExpiryInterval, 100, 100, 100, 100,
 		propKeyMaxRecv, 100, 100,

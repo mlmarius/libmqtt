@@ -97,10 +97,10 @@ func baseClient(t *testing.T, handler *extraHandler) Client {
 			}
 		}),
 		WithNetHandleFunc(func(client Client, server string, err error) {
-			if err != nil {
-				// t.Error(err)
-				// t.FailNow()
-			}
+			// if err != nil {
+			// 	// t.Error(err)
+			// 	// t.FailNow()
+			// }
 		}),
 		WithPersistHandleFunc(func(client Client, packet Packet, err error) {}),
 	)
@@ -211,7 +211,7 @@ func allClients(t *testing.T, handler *extraHandler) map[Client]func() {
 func handleTopicAndSub(c Client, t *testing.T) {
 	for i := range testTopics {
 		c.HandleTopic(testTopics[i], func(client Client, topic string, maxQos byte, msg []byte) {
-			if maxQos != testPubMsgs[i].Qos || bytes.Compare(testPubMsgs[i].Payload, msg) != 0 {
+			if maxQos != testPubMsgs[i].Qos || !bytes.Equal(testPubMsgs[i].Payload, msg) {
 				t.Errorf("fail at sub topic = %v, content unexpected, payload = %v, target payload = %v",
 					topic, string(msg), string(testPubMsgs[i].Payload))
 				t.FailNow()

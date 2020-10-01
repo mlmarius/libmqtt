@@ -54,13 +54,19 @@ func defaultConnectOptions() connectOptions {
 		keepaliveFactor: 1.5,
 		connPacket:      &ConnPacket{},
 
-		newConnection: func(ctx context.Context, address string, timeout time.Duration, tlsConfig *tls.Config) (conn net.Conn, e error) {
+		newConnection: func(
+			ctx context.Context,
+			address string,
+			timeout time.Duration,
+			tlsConfig *tls.Config,
+		) (conn net.Conn, e error) {
 			return tcpConnect(ctx, address, timeout, 0, tlsConfig)
 		},
 	}
 }
 
 // connect options when connecting server (for conn packet)
+// nolint:maligned
 type connectOptions struct {
 	connHandler     ConnHandleFunc
 	dialTimeout     time.Duration
@@ -80,7 +86,13 @@ type connectOptions struct {
 	newConnection Connector
 }
 
-func (c connectOptions) connect(parent *AsyncClient, server string, version ProtoVersion, reconnectDelay time.Duration) {
+// nolint:gocyclo
+func (c connectOptions) connect(
+	parent *AsyncClient,
+	server string,
+	version ProtoVersion,
+	reconnectDelay time.Duration,
+) {
 	var (
 		conn net.Conn
 		err  error
@@ -151,10 +163,8 @@ func (c connectOptions) connect(parent *AsyncClient, server string, version Prot
 				return
 			}
 
-			switch pkt.(type) {
+			switch p := pkt.(type) {
 			case *ConnAckPacket:
-				p := pkt.(*ConnAckPacket)
-
 				if p.Code != CodeSuccess {
 					close(connImpl.logicSendC)
 

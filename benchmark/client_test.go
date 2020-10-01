@@ -79,6 +79,7 @@ func BenchmarkLibmqttClient(b *testing.B) {
 }
 
 func BenchmarkPahoClient(b *testing.B) {
+	// nolint:staticcheck
 	b.N = testPubCount
 	b.ReportAllocs()
 

@@ -70,3 +70,6 @@ fuzz_test:
 
 fuzz_clean:
 	rm -rf fuzz-test libmqtt-fuzz.zip
+
+fmt:
+	golangci-lint run --fix ./...

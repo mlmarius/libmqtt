@@ -64,5 +64,5 @@ func TestClient_Reconnect(t *testing.T) {
 		}
 	}
 
-	goleak.VerifyNoLeaks(t)
+	goleak.VerifyNone(t)
 }

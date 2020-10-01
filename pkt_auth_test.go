@@ -24,6 +24,7 @@ import (
 )
 
 var (
+	// nolint:deadcode,varcheck,unused
 	testAuthMsg = &AuthPacket{
 		BasePacket: BasePacket{ProtoVersion: V5},
 		Code:       CodeReAuth,
@@ -36,6 +37,7 @@ var (
 	}
 	testAuthMsgBytes []byte
 
+	// nolint:deadcode,varcheck,unused
 	testProps = map[byte][]byte{
 		propKeyAuthMethod:   {0, 4, 'M', 'Q', 'T', 'T'},
 		propKeyAuthData:     {0, 4, 'M', 'Q', 'T', 'T'},
@@ -74,7 +76,7 @@ func TestAuthProps_SetProps(t *testing.T) {
 		t.Error("auth method set failed")
 	}
 
-	if bytes.Compare(emptyProps.AuthData, testAuthMsg.Props.AuthData) != 0 {
+	if !bytes.Equal(emptyProps.AuthData, testAuthMsg.Props.AuthData) {
 		t.Error("auth data set failed")
 	}
 

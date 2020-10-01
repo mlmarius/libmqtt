@@ -48,7 +48,7 @@ func TestDecodeOnePacket(t *testing.T) {
 		case *ConnPacket:
 			_ = Encode(pkt, buf)
 			pktBytes := buf.Bytes()
-			if bytes.Compare(pktBytes, targetBytes) != 0 {
+			if !bytes.Equal(pktBytes, targetBytes) {
 				t.Error(pktBytes)
 			}
 		default:
@@ -83,10 +83,8 @@ func TestDecodeOnePacket(t *testing.T) {
 	}
 	if _, err := buf.Write(malformedConnBytes); err != nil {
 		t.Error(err)
-	} else {
-		if _, err := Decode(V311, buf); err == nil {
-			t.Error("decoded conn packet, should not happen")
-		}
+	} else if _, err := Decode(V311, buf); err == nil {
+		t.Error("decoded conn packet, should not happen")
 	}
 }
 

@@ -33,7 +33,7 @@ func TestNewClient(t *testing.T) {
 		t.Errorf("create new client with invalid tls should fail")
 	}
 
-	goleak.VerifyNoLeaks(t)
+	goleak.VerifyNone(t)
 }
 
 func testAllClient(t *testing.T, handler *extraHandler) {
@@ -53,7 +53,7 @@ func TestClient_Connect(t *testing.T) {
 		},
 	})
 
-	goleak.VerifyNoLeaks(t)
+	goleak.VerifyNone(t)
 }
 
 // conn -> pub
@@ -67,7 +67,7 @@ func TestClient_Publish(t *testing.T) {
 		},
 	})
 
-	goleak.VerifyNoLeaks(t)
+	goleak.VerifyNone(t)
 }
 
 // conn -> sub -> pub
@@ -84,7 +84,7 @@ func TestClient_Subscribe(t *testing.T) {
 		},
 	})
 
-	goleak.VerifyNoLeaks(t)
+	goleak.VerifyNone(t)
 }
 
 // conn -> sub -> pub -> unSub
@@ -101,5 +101,5 @@ func TestClient_UnSubscribe(t *testing.T) {
 		},
 	})
 
-	goleak.VerifyNoLeaks(t)
+	goleak.VerifyNone(t)
 }

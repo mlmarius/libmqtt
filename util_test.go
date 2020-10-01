@@ -123,7 +123,7 @@ func TestGetRawProps(t *testing.T) {
 		t.Error(err)
 	}
 
-	if bytes.Compare(payload, next) != 0 {
+	if !bytes.Equal(payload, next) {
 		t.Error("payload decode error")
 		t.Log(next)
 	}

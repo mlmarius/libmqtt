@@ -45,7 +45,7 @@ var (
 	_True  = true
 	_False = false
 	True   = &_True
-	False  = &_False
+	False  = &_False // nolint:unused
 )
 
 var (
@@ -80,6 +80,7 @@ func testPacketBytes(version ProtoVersion, pkt Packet, target []byte, t *testing
 	})
 }
 
+// nolint:unparam
 func newV5TestPacketBytes(typ CtrlType, flags byte, props []byte, payload []byte) []byte {
 	packetBuf := new(bytes.Buffer)
 	packetBuf.WriteByte((typ << 4) | flags)

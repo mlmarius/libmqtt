@@ -83,7 +83,6 @@ func BenchmarkFuncDecode(b *testing.B) {
 	pkt := testPubMsgs[0]
 
 	b.ReportAllocs()
-	b.N = 100000000
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := Encode(pkt, buf); err != nil {
