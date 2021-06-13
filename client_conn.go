@@ -351,7 +351,7 @@ func (c *clientConn) handleNetRecv() {
 			return
 		}
 
-		if pkt.Version() != c.protoVersion {
+		if pkt.Type() != CtrlPingResp && pkt.Version() != c.protoVersion {
 			// protocol version not match, exit
 			c.exit()
 			return
