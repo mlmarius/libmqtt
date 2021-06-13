@@ -29,7 +29,7 @@ type ConnHandler func(server string, code byte, err error)
 // TopicHandleFunc handles topic sub message
 // topic is the client user provided topic
 // code can be SubOkMaxQos0, SubOkMaxQos1, SubOkMaxQos2, SubFail
-type TopicHandleFunc func(client Client, topic string, qos QosLevel, msg []byte)
+type TopicHandleFunc func(client Client, packet *PublishPacket)
 
 // Deprecated: use TopicHandleFunc instead, will be removed in v1.0
 type TopicHandler func(topic string, qos QosLevel, msg []byte)

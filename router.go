@@ -95,7 +95,7 @@ func (r *RegexRouter) Dispatch(client Client, p *PublishPacket) {
 	r.m.Range(func(k, v interface{}) bool {
 		if reg := k.(*regexp.Regexp); reg.MatchString(p.TopicName) {
 			handler := v.(TopicHandleFunc)
-			handler(client, p.TopicName, p.Qos, p.Payload)
+			handler(client, p)
 		}
 		return true
 	})
@@ -138,6 +138,6 @@ func (r *TextRouter) Dispatch(client Client, p *PublishPacket) {
 
 	if h, ok := r.m.Load(p.TopicName); ok {
 		handler := h.(TopicHandleFunc)
-		handler(client, p.TopicName, p.Qos, p.Payload)
+		handler(client, p)
 	}
 }

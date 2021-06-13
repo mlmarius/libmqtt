@@ -101,11 +101,11 @@ func defaultClient() *AsyncClient {
 // Handle register subscription message route
 //
 // Deprecated: use HandleTopic instead, will be removed in v1.0
-func (c *AsyncClient) Handle(topic string, h TopicHandler) {
+func (c *AsyncClient) Handle(topic string, h TopicHandleFunc) {
 	if h != nil {
 		c.log.v("CLI registered topic handler, topic =", topic)
-		c.router.Handle(topic, func(client Client, topic string, qos QosLevel, msg []byte) {
-			h(topic, qos, msg)
+		c.router.Handle(topic, func(client Client, packet *PublishPacket) {
+			h(c, packet)
 		})
 	}
 }
